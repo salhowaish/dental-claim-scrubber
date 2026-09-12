@@ -195,8 +195,8 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
     return "".join(instructions)
 
 def generate_scrubbed_package(client, doctor_input, cchi_text, system_instruction):
-    """Executes call using high-quota production Flash models (1,500 free queries/day)."""
-    models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    """Executes call using production Gemini Flash with automatic retry resilience."""
+    models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
     last_error = None
 
     prompt_payload = f"""
@@ -207,7 +207,7 @@ CLINICIAN ENCOUNTER CASE SUMMARY:
 {doctor_input}
 """
 
-    for model_name in models:
+    for model_name in models_to_try:
         for attempt in range(2):
             try:
                 response = client.models.generate_content(
@@ -221,12 +221,8 @@ CLINICIAN ENCOUNTER CASE SUMMARY:
                 return response.text
             except Exception as e:
                 last_error = e
-                err_text = str(e)
-                if "503" in err_text or "429" in err_text:
-                    time.sleep(2)
-                    continue
-                else:
-                    break
+                time.sleep(1)
+                continue
     raise last_error
 
 # ==========================================
@@ -238,7 +234,7 @@ with col_in:
     st.subheader("📝 Clinician Input")
     doctor_input = st.text_area(
         "Enter clinical case summary (paste previous Continuity Block here for follow-up visits):",
-        placeholder="e.g.:\n- second visit, missing lower posterior teeth case referred for acrylic RPD\n- or paste the [NPHIES CASE CONTINUITY BLOCK] from the previous appointment along with today's notes",
+        placeholder="e.g.:\n- crown prep and temp tooth 26\n- second visit, missing lower posterior teeth case referred for acrylic RPD\n- or paste the [NPHIES CASE CONTINUITY BLOCK] from the previous appointment along with today's notes",
         height=170
     )
     
@@ -273,9 +269,9 @@ with col_in:
             "Select Clinical Pathway (Preset Workflow):",
             [
                 "Auto-detect from case input",
+                "Indirect Crown / Bridge — [2 Visits: Prep/Impression/Provisional -> Final Cementation]",
                 "Removable Partial Denture (RPD) — [4 Visits: Primary Imp -> Master Imp/Bite -> Try-In -> Delivery]",
                 "Complete Dentures (Full Arch / Bimaxillary) — [5 Visits: Imp 1 -> Border Mold/Imp 2 -> Jaw Relation -> Try-In -> Delivery]",
-                "Indirect Crown / Bridge — [2 Visits: Prep/Impression/Provisional -> Final Cementation]",
                 "Multi-Visit Endodontics (RCT) — [2 Visits: Emergency Pulpectomy/Dressing -> Final Obturation]",
                 "Implant Stage Protocol — [Staged: Surgical Placement -> Stage-2 Exposure -> Final Impression -> Prosthesis Delivery]"
             ]
@@ -305,8 +301,4 @@ with col_out:
                     )
                     st.markdown(result_text)
                 except Exception as e:
-                    err_str = str(e)
-                    if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                        st.error("⏳ **Rate limit encountered.** Please wait a few seconds and try again.")
-                    else:
-                        st.error(f"Service temporarily busy: {err_str}")
+                    st.error(f"Service error: {str(e)}")
