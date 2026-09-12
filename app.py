@@ -18,44 +18,50 @@ st.divider()
 api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.sidebar.text_input("Gemini API Key", type="password")
 
 if not api_key:
-    st.sidebar.info("💡 Add `GEMINI_API_KEY` into Streamlit App Secrets to keep this unlocked.")
+    st.sidebar.info("💡 Add `GEMINI_API_KEY` into Streamlit App Secrets to keep this permanently unlocked.")
 
 SYSTEM_INSTRUCTIONS = """
-You are an expert Certified Professional Coder (CPC) and Dental Documentation Auditor in Saudi Arabia.
+You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Documentation Auditor in Saudi Arabia.
 
-Enforce Australian Coding Standards (ACS 0042), ACHI 10th Edition, SBS v3.0, and CCHI/NPHIES Medical Necessity Rules:
+Enforce Australian Coding Standards (ACS 0042), ACHI 10th Edition, SBS v3.0, and CCHI/NPHIES Medical Necessity & Anti-Unbundling Rules:
 
-1. DIAGNOSIS (ICD-10-AM):
-   - Provide the specific, valid ICD-10-AM code (e.g., K08.1 for complete/partial edentulism, K01.1 for impaction, K04.02 for irreversible pulpitis, K05.31 for periodontitis, K03.81 for fractured tooth, K02.1 for dentine caries).
+1. MANDATORY COMBINATION CODES (ZERO UNBUNDLING ACROSS ALL SPECIALTIES):
+   - Whenever a single combination code exists in ACHI / SBS v3.0 that encompasses multiple concurrent services, YOU MUST USE THE COMBINATION CODE. Splitting into separate codes is strictly prohibited.
+   - COMPLETE DENTURES (Full Mouth / Bimaxillary / Upper & Lower / 'u/l cd'): MUST code SBS `97719-00-00` / ACHI `97719-00` [Block 474] (Removable complete denture, maxillary and mandibular). NEVER split into separate upper (97711/97721) and lower (97712/97722) codes.
+   - RESTORATIVE: Contiguous surfaces on the same tooth must be billed as a single multi-surface restoration code (1, 2, 3, 4, or 5 surfaces). NEVER bill separate 1-surface restorations for the same tooth.
+   - ENDODONTICS: Global molar/premolar RCT codes must be prioritized over unbundling into separate prep and obturation lines.
+   - SURGERY & PERIODONTICS: Quadrant codes (e.g., SRP 97222) cover up to 8 teeth; never unbundle per tooth. Flap elevation, ostectomy, sectioning, debridement, and suturing are all bundled into surgical extraction (97324-01).
 
 2. BILLABLE CODING TABLE (SBS v3.0 & ACHI):
-   - FORMAT RULE: SBS v3.0 codes MUST strictly follow the 9-digit format: `XXXXX-XX-XX` (ACHI code + 2-digit SBS tariff suffix, e.g., `97721-00-10`, `97022-00-10`, `97324-01-00`, `97420-03-00`).
-   - NEVER use alphanumeric category shorthand (e.g., NEVER write `DEN.PRO.01` or `RAD.02.01`).
-   - NEVER include chairside local anesthesia codes (Block 1909, 92509, 92513) in the billable table. Local anesthesia is bundled into the primary procedure per ACS 0042. Local anesthesia must ONLY appear in the narrative progress note.
-   - Routine component steps (rubber dam, bases, matrices, gingival retraction, suturing) must NOT be unbundled into separate line items.
+   - FORMAT: SBS v3.0 codes MUST strictly follow the 9-digit format: `XXXXX-XX-XX` (ACHI code + 2-digit SBS tariff suffix, e.g., `97719-00-00`, `97022-00-10`, `97324-01-00`).
+   - NEVER use alphanumeric category shorthand (e.g., NEVER write `DEN.PRO.01`).
+   - NEVER include chairside local anesthesia codes (Block 1909, 92509, 92513) in the billable table. Local anesthesia is bundled into primary care per ACS 0042.
 
-3. CLINICIAN'S RAPID PRE-FLIGHT CHECKLIST (CCHI / NPHIES):
-   - Scale dynamically based on case complexity: include every item necessary to protect the claim, but keep each point to a single, easily digestible line that can be scanned chairside in seconds.
-   - Format strictly as: `[ ] **Category:** Brief, clear requirement`.
-   - Strip out all IT schema jargon (e.g., no raw error codes like RULE_ERR_INVALID_BODY_SITE).
-   - Address the critical clinical justification items where applicable:
-     * Correct site notation (FDI tooth # vs. Arch 01/02 for dentures)
-     * Mandatory imaging (Pre-op PA showing apex, angulated shift shot, bitewings showing bone loss, or OPG)
-     * Objective diagnostic threshold (pocket depths, pulpal test, tooth/bone sectioning)
-     * Prior authorization requirement (if applicable under NPHIES)
-     * Primary denial trap to avoid for this encounter
+3. RAPID CLINICIAN PRE-FLIGHT CHECKLIST:
+   - Dynamic length based on clinical complexity: include all points necessary to prevent claim denial, but keep each point to a single, bold, scannable line that can be read chairside in seconds.
+   - Format: `[ ] **Element:** Actionable clinical requirement`.
+   - Strip out all IT schema and database error codes. Focus strictly on:
+     * Anatomical Site / Arch qualifier (e.g., Arch 01 & 02 / Bimaxillary)
+     * Mandatory imaging attachments (OPG, PA, bitewings)
+     * Objective clinical criteria (ridge resorption, pocket depth, bone removal)
+     * NPHIES prior authorization requirement (if applicable)
+     * #1 Primary denial pitfall for this specific procedure
 
 4. AUDIT-PROOF EPIC SOAP PROGRESS NOTE:
-   - Clean, standardized, professional SOAP operative record ready to copy-paste into Epic.
+   - Clean, standardized, professional SOAP operative progress note ready to copy-paste directly into Epic.
 """
 
 def generate_with_resilience(client, prompt):
-    """Retries automatically on 503 demand spikes and transient connection drops."""
-    models = ["gemini-3.7-flash"]
+    """
+    Dual-engine resilience:
+    1. Tries primary model (gemini-3.7-flash) with silent retry.
+    2. Instantly falls back to high-capacity workhorse (gemini-2.0-flash) if 503 persists.
+    """
+    models = ["gemini-3.7-flash", "gemini-2.0-flash"]
     last_error = None
 
     for model_name in models:
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 response = client.models.generate_content(
                     model=model_name,
@@ -69,11 +75,12 @@ def generate_with_resilience(client, prompt):
             except Exception as e:
                 last_error = e
                 err_text = str(e)
+                # If server spikes with 503 or 429, wait briefly and retry
                 if "503" in err_text or "429" in err_text:
-                    time.sleep(1.5 * (attempt + 1))
+                    time.sleep(2)
                     continue
                 else:
-                    break
+                    break  # Break to fallback model on non-transient error
     raise last_error
 
 col_in, col_out = st.columns([1, 1], gap="large")
@@ -82,7 +89,7 @@ with col_in:
     st.subheader("📝 Clinician Input")
     doctor_input = st.text_area(
         "Enter brief encounter notes:",
-        placeholder="e.g., Full upper and lower complete dentures, severe ridge resorption... OR Crown prep tooth 14... OR Surgical extraction 48...",
+        placeholder="e.g., u/l cd, severe ridge resorption... OR #14 Crown prep... OR Extracted 48 impacted...",
         height=200
     )
     submit_btn = st.button("🚀 Audit Case & Generate Epic Note", type="primary", use_container_width=True)
@@ -95,10 +102,10 @@ with col_out:
         elif not doctor_input.strip():
             st.warning("Please type a case summary.")
         else:
-            with st.spinner("Scrubbing against SBS v3.0 & CCHI standards..."):
+            with st.spinner("Scrubbing against SBS v3.0 combination rules..."):
                 try:
                     client = genai.Client(api_key=api_key)
                     result_text = generate_with_resilience(client, doctor_input)
                     st.markdown(result_text)
                 except Exception as e:
-                    st.error(f"High traffic spike. Please tap again: {str(e)}")
+                    st.error(f"Service temporarily busy. Please tap again: {str(e)}")
