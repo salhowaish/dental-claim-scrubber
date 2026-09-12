@@ -9,35 +9,37 @@ st.set_page_config(
     layout="wide"
 )
 
-# Header & Branding
+# Header
 st.title("🦷 Saudi Dental Documentation & Claim Scrubber")
-st.markdown("Automated CCHI/NPHIES Medical Necessity Engine • SBS v3.0 & ACHI Coding • Audit-Proof Epic Notes")
+st.caption("Standardized Epic SOAP Notes • CCHI MDS Compliance • SBS v3.0 & ACHI Bundling Engine")
 st.divider()
 
-# API Key handling: uses Streamlit Secrets if available, otherwise asks user in sidebar
+# API Key handling
 api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.sidebar.text_input("Gemini API Key", type="password")
 
-if not api_key:
-    st.sidebar.info("💡 Add `GEMINI_API_KEY` into Streamlit App Secrets to keep this unlocked.")
-
 SYSTEM_INSTRUCTIONS = """
-You are an expert Certified Professional Coder (CPC), Dental Revenue Cycle Auditor, and Clinical Documentation Specialist in Saudi Arabia.
+You are an expert Certified Professional Coder (CPC) and Dental Documentation Auditor in Saudi Arabia.
 
-Enforce Australian Coding Standards (ACS 0042), ACHI 10th Edition, SBS v3.0, and CCHI/NPHIES Medical Necessity & Bundling Rules:
+Enforce Australian Coding Standards (ACS 0042), ACHI 10th Edition, SBS v3.0, and CCHI/NPHIES Medical Necessity:
 
-1. MISSING DIAGNOSIS: If the clinician does not supply an exact diagnosis, infer the most specific, medically justified ICD-10-AM codes (e.g., K01.1 for impactions, K04.02 for irreversible pulpitis, K05.31 for periodontitis, K03.81 for fractured tooth, K02.1 for dentine caries).
+1. DIAGNOSIS (ICD-10-AM):
+   - Provide the specific, valid ICD-10-AM code (e.g., K08.1 for tooth loss/edentulism, K01.1 for impaction, K04.02 for irreversible pulpitis, K05.31 for periodontitis, K02.1 for caries).
 
-2. BILLABLE CODING TABLE:
-   - Provide exact SBS v3.0 codes, ACHI codes, and standard tariffs.
-   - CRITICAL COMPLIANCE CONSTRAINT: NEVER include local/regional anesthesia codes (Block 1909, 92509, 92513) in the Billable Coding Table. Local anesthesia is bundled into the primary procedure per ACS 0042. Local anesthesia must ONLY appear in the narrative progress note.
-   - Component steps (rubber dam, cavity bases, matrices, gingival retraction, suturing) must NOT be unbundled into separate line items.
+2. BILLABLE CODING TABLE (SBS v3.0 & ACHI):
+   - FORMAT RULE: SBS v3.0 codes MUST strictly follow the 9-digit format: `XXXXX-XX-XX` (ACHI code + 2-digit SBS tariff suffix, e.g., `97721-00-10`, `97022-00-10`, `97324-01-00`, `97420-03-00`).
+   - NEVER use alphanumeric category shorthand (e.g., NEVER write `DEN.PRO.01` or `RAD.02.01`).
+   - NEVER include chairside local anesthesia codes (Block 1909, 92509, 92513) in the billable table. Local anesthesia is bundled into the primary procedure per ACS 0042.
+   - Restorations, extractions, endo, and prostho must follow non-unbundled global tariffs.
 
-3. CCHI / NPHIES AUDIT CHECKLIST:
-   - List the mandatory Minimum Data Set (MDS) elements required to prevent denial (tooth FDI number, required pre-op/post-op X-rays, vitality test results, periodontal probing depths).
-   - Detail the Top 3 denial pitfalls for this specific encounter.
+3. 5-SECOND DOCTOR'S CCHI CHECKLIST:
+   - Keep this ULTRA-CONCISE (maximum 4 bullet checkmarks). No technical IT/schema jargon. Clinicians must be able to read and verify it in 5 seconds chairside:
+     * [ ] **Target Site:** (Tooth # / Arch 01 or 02)
+     * [ ] **Required Radiograph:** (Pre-op PA / OPG required for approval)
+     * [ ] **Clinical Justification:** (e.g., severe ridge resorption, caries to pulp, pocket >= 5mm)
+     * [ ] **#1 Denial Pitfall:** (The single mistake that causes rejection for this specific case)
 
 4. AUDIT-PROOF EPIC SOAP PROGRESS NOTE:
-   - Generate a standardized, legally defensible, accreditation-ready (CCHI / CBAHI) SOAP note ready to copy directly into Epic.
+   - Clean, standardized, professional SOAP operative record ready to copy-paste into Epic.
 """
 
 def generate_with_resilience(client, prompt):
@@ -60,7 +62,6 @@ def generate_with_resilience(client, prompt):
             except Exception as e:
                 last_error = e
                 err_text = str(e)
-                # If server spikes with 503 (high demand) or 429, wait and retry
                 if "503" in err_text or "429" in err_text:
                     time.sleep(1.5 * (attempt + 1))
                     continue
@@ -71,11 +72,11 @@ def generate_with_resilience(client, prompt):
 col_in, col_out = st.columns([1, 1], gap="large")
 
 with col_in:
-    st.subheader("📝 Clinician Encounter Input")
+    st.subheader("📝 Clinician Input")
     doctor_input = st.text_area(
-        "Enter what you did, where, and why (brief sentence or notes):",
-        placeholder="Example inputs:\n- #14 Crown removal and restorability assessment\n- Surgical extraction tooth 48 impacted, cut bone and sectioned tooth\n- RCT tooth 16, 4 canals found and filled\n- Deep cleaning lower right quadrant, pockets 5-6mm",
-        height=220
+        "Enter brief encounter notes:",
+        placeholder="e.g., Full upper and lower complete dentures, severe ridge resorption... OR Crown prep tooth 14... OR Surgical extraction 48...",
+        height=200
     )
     submit_btn = st.button("🚀 Audit Case & Generate Epic Note", type="primary", use_container_width=True)
 
@@ -83,14 +84,14 @@ with col_out:
     st.subheader("📋 Audit & Coding Package")
     if submit_btn:
         if not api_key:
-            st.error("Please enter a Gemini API Key in the left sidebar or Secrets.")
+            st.error("Missing Gemini API Key.")
         elif not doctor_input.strip():
-            st.warning("Please type a case summary on the left.")
+            st.warning("Please type a case summary.")
         else:
-            with st.spinner("Scrubbing against CCHI Minimum Data Set & SBS v3.0 bundling rules..."):
+            with st.spinner("Scrubbing against SBS v3.0 & CCHI standards..."):
                 try:
                     client = genai.Client(api_key=api_key)
                     result_text = generate_with_resilience(client, doctor_input)
                     st.markdown(result_text)
                 except Exception as e:
-                    st.error(f"High traffic spike. Please tap the button again: {str(e)}")
+                    st.error(f"High traffic spike. Please tap again: {str(e)}")
