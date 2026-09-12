@@ -7,7 +7,7 @@ from google import genai
 from google.genai import types
 
 st.set_page_config(
-    page_title="DENTIX | Clinical & Revenue Intelligence",
+    page_title="FERRULE | Dr. Sulaiman Alhowaish",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -18,7 +18,7 @@ st.set_page_config(
 # ==========================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -27,27 +27,38 @@ st.markdown("""
     /* Top Bar & Branding */
     .brand-header {
         margin-bottom: 1.5rem;
-        padding-bottom: 1rem;
+        padding-bottom: 1.1rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
+    .brand-title-row {
+        display: flex;
+        align-items: baseline;
+        gap: 0.75rem;
+        margin-bottom: 0.35rem;
+    }
     .brand-title {
-        font-size: 1.85rem;
-        font-weight: 700;
-        letter-spacing: -0.02em;
+        font-size: 2.1rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
         color: #F8FAFC;
-        margin-bottom: 0.25rem;
+    }
+    .brand-author {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #38BDF8;
+        letter-spacing: -0.01em;
     }
     .brand-subtitle {
         font-size: 0.88rem;
         font-weight: 400;
         color: #94A3B8;
-        line-height: 1.4;
+        line-height: 1.45;
     }
     
     /* Tag Pills */
     .tag-pill {
         display: inline-block;
-        padding: 0.2rem 0.6rem;
+        padding: 0.22rem 0.65rem;
         border-radius: 9999px;
         font-size: 0.72rem;
         font-weight: 600;
@@ -64,37 +75,38 @@ st.markdown("""
         border: 1px solid rgba(245, 158, 11, 0.25);
     }
     
-    /* Profile & Metadata Card */
+    /* Executive Profile Card */
     .profile-card {
-        background: rgba(30, 41, 59, 0.4);
+        background: rgba(30, 41, 59, 0.45);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 10px;
-        padding: 1.15rem;
+        padding: 1.2rem;
         margin-bottom: 1.25rem;
     }
     .profile-name {
-        font-size: 1.05rem;
+        font-size: 1.1rem;
         font-weight: 700;
         color: #F8FAFC;
-        margin-bottom: 0.15rem;
+        margin-bottom: 0.2rem;
+        letter-spacing: -0.01em;
     }
     .profile-role {
-        font-size: 0.8rem;
+        font-size: 0.82rem;
         font-weight: 600;
         color: #38BDF8;
-        margin-bottom: 0.1rem;
+        margin-bottom: 0.15rem;
     }
     .profile-org {
         font-size: 0.76rem;
         color: #94A3B8;
-        line-height: 1.35;
-        margin-bottom: 0.65rem;
+        line-height: 1.4;
+        margin-bottom: 0.75rem;
     }
     .profile-contact {
-        font-size: 0.74rem;
+        font-size: 0.75rem;
         color: #CBD5E1;
-        line-height: 1.6;
-        padding-top: 0.6rem;
+        line-height: 1.65;
+        padding-top: 0.65rem;
         border-top: 1px solid rgba(255, 255, 255, 0.06);
     }
     .profile-contact a {
@@ -112,8 +124,8 @@ st.markdown("""
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: #64748B;
-        margin-top: 0.9rem;
-        margin-bottom: 0.35rem;
+        margin-top: 0.95rem;
+        margin-bottom: 0.4rem;
     }
     
     /* Input Container Box */
@@ -172,7 +184,7 @@ with st.sidebar:
         <div class="profile-contact">
             <strong>Mobile:</strong> <a href="tel:+966508172926">+966 50 817 2926</a><br>
             <strong>Email:</strong> <a href="mailto:s.alhowaish@gmail.com">s.alhowaish@gmail.com</a><br>
-            <strong>Specialty:</strong> Prosthodontist & Healthcare RCM
+            <strong>Focus:</strong> Prosthodontics & Revenue Cycle Architecture
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -203,12 +215,15 @@ st.markdown("""
 <div class="brand-header">
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
-            <div class="brand-title">DENTIX · Clinical Intelligence Engine</div>
+            <div class="brand-title-row">
+                <span class="brand-title">FERRULE</span>
+                <span class="brand-author">by Dr. Sulaiman Alhowaish</span>
+            </div>
             <div class="brand-subtitle">
-                Autonomous Clinical Documentation & NPHIES SBS v3.0 Regulatory Compliance Scrubber
+                Autonomous Clinical Documentation & NPHIES SBS v3.0 Revenue Assurance Engine
             </div>
         </div>
-        <div style="text-align: right;">
+        <div style="text-align: right; padding-top: 0.25rem;">
             <span class="tag-pill">SBS v3.0</span>
             <span class="tag-pill">ACHI 10th Ed</span>
             <span class="tag-pill-gold">NPHIES Core</span>
