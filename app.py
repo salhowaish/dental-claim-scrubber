@@ -8,7 +8,7 @@ from google.genai import types
 
 st.set_page_config(
     page_title="FERRULE | Dr. Sulaiman Alhowaish",
-    page_icon="🛡️",
+    page_icon="favicon.svg",
     layout="wide",
     initial_sidebar_state="expanded"
 )
