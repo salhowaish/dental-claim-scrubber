@@ -55,7 +55,7 @@ with st.sidebar:
 st.title("🦷 Saudi Dental Documentation & Claim Scrubber")
 st.markdown(
     "**Clinical AI Engine by Dr. Sulaiman Alhowaish (SB-Pros, CPC, MSc Insurance, IBM AI)**  \n"
-    "*Universal CCHI / NPHIES Bundling Engine • SBS v3.0 & ACHI 10th Ed • Audit-Proof Epic Notes*"
+    "*Universal CCHI / NPHIES Bundling Engine • SBS v3.0 & ACHI 10th Ed • Audit-Proof EMR Clinical Notes*"
 )
 st.divider()
 
@@ -126,8 +126,8 @@ REQUIRED OUTPUT STRUCTURE
      * [ ] **Prior Authorization:** Status under NPHIES rules.
      * [ ] **#1 Denial Trap:** Primary pitfall to avoid.
 
-4. AUDIT-PROOF EPIC SOAP PROGRESS NOTE
-   - STRICT EMR FORMATTING CONSTRAINT: Do NOT include patient demographics (no Patient Name, MRN, Date of Service, Age, Gender brackets). Do NOT include doctor signature lines, provider credential blocks, SCFHS license numbers, or NPHIES provider IDs.
+4. AUDIT-PROOF EMR SOAP CLINICAL PROGRESS NOTE
+   - STRICT EMR FORMATTING CONSTRAINT: Do NOT include patient demographics (no Patient Name, MRN, Date of Service, Age, Gender brackets). Do NOT include doctor signature lines, provider credential blocks, SCFHS license numbers, or NPHIES provider IDs (hospital EMR systems generate all of these automatically upon signing).
    - The note MUST start directly with:
      **Encounter Specialty:** [e.g., Prosthodontics, Endodontics, Oral & Maxillofacial Surgery, Restorative Dentistry, Pediatric Dentistry, Periodontics]
    - Follow immediately with the clinical record:
@@ -174,7 +174,7 @@ with col_in:
         placeholder="e.g.:\n- 13 yo trauma tooth 11, pulp exposure, vital pulp therapy\n- Full mouth complete dentures, severe bone resorption\n- Tooth 48 impacted, ostectomy and sectioning\n- Tooth 26 crown prep fractured cusp",
         height=200
     )
-    submit_btn = st.button("🚀 Audit Case & Generate Epic Note", type="primary", use_container_width=True)
+    submit_btn = st.button("🚀 Audit Case & Generate EMR Clinical Note", type="primary", use_container_width=True)
 
 with col_out:
     st.subheader("📋 Audit & Coding Package")
