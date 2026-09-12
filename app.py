@@ -61,11 +61,11 @@ with st.sidebar:
     """)
     st.markdown("---")
     
-    st.markdown("#### 📖 Primary Grounding Source")
+    st.markdown("#### 📖 Grounding Engine Status")
     if cchi_index_text:
-        st.success("✅ CCHI SBS v3 Dental Index Connected (19 Pages Active)")
+        st.success("✅ CCHI SBS v3 Dental Index Active (19 Pages Grounded)")
     else:
-        st.warning("⚠️ `sbs_dental_index.pdf` not found in repo root. Using prompt knowledge fallback.")
+        st.warning("⚠️ `sbs_dental_index.pdf` not found in repo root. Using prompt fallback.")
     st.markdown("---")
 
     # API Key Handling
@@ -79,108 +79,93 @@ with st.sidebar:
 st.title("🦷 Saudi Dental Documentation & Claim Scrubber")
 st.markdown(
     "**Clinical AI Engine by Dr. Sulaiman Alhowaish (SB-Pros, CPC, MSc Insurance, IBM AI)**  \n"
-    "*Grounded in Official CCHI SBS v3.0 Dental Index • ACHI 10th Ed • Audit-Proof EMR Clinical Notes*"
+    "*Grounded in Official CCHI SBS v3.0 Dental Index • ACHI 10th Ed • Customizable EMR Outputs*"
 )
 st.divider()
 
-SYSTEM_INSTRUCTIONS = """
+# ==========================================
+# PROMPT LOGIC & DYNAMIC STRUCTURE BUILDER
+# ==========================================
+BASE_PRINCIPLES = """
 You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Documentation Auditor in Saudi Arabia.
-
 You are provided with the full text of the official Council of Health Insurance (CCHI) Saudi Billing System (SBS) Version 3 Dental Alphabetic Index.
-You MUST search this attached CCHI index to identify the exact 9-digit SBS code, the 7-digit ACHI code, and the [Block] number for any dental intervention.
+You MUST search this index to identify the exact 9-digit SBS code, the 7-digit ACHI code, and the [Block] number for any dental intervention.
 
-Enforce the following 5 Universal Principles:
+Enforce the following Universal Principles:
+1. GROUNDING & ACTION FLAGS: Look up procedures using CCHI Lead Terms. Assign: [PRIMARY CLAIM ITEM], [CO-BILLABLE PROCEDURE], [CO-BILLABLE DIAGNOSTIC], or [PRIOR-AUTH / PLANNED FUTURE SERVICE]. Place competing alternatives for the same site in "⚠️ Mutually Exclusive Alternatives".
+2. ZERO UNBUNDLING: Obey CCHI "omit code" instructions (e.g., temporary crowns/bridges, dressings/irrigations, sutures for hemorrhage, new denture adjustments are all bundled). Bimaxillary dentures must use omnibus 97719-00-00 [474]. Multi-surface restorations use single combination codes.
+3. INHERENT COMPONENTS: Local anesthesia (Block 1909), isolation, cavity bases/liners, and impression trays/materials are strictly non-billable.
+4. DIGIT VALIDATION: ACHI Code = strictly 7 digits (XXXXX-XX). SBS Code = strictly 9 digits (XXXXX-XX-XX). Always include the [Block].
+5. MANDATORY BLANK PLACEHOLDERS: NEVER guess or pre-fill tooth numbers, measurements, or materials not stated by the user. Use strictly blank placeholders: `[Specify FDI Tooth: #___]`, `[Specify Probing Depth: ___ mm]`, `[Specify Material: ___]`.
+"""
 
-================================================================================
-UNIVERSAL PRINCIPLE 1: GROUNDING IN THE CCHI DENTAL INDEX & CLAIM ACTION FLAGS
-================================================================================
-- Look up procedures using the official CCHI Lead Terms (e.g., Denture, Crown, Extraction, Fabrication, Provision, Restoration, Removal, Application, Root canal).
-- Output the official CCHI Block number alongside every code.
-- Claim Action Flags MUST strictly be one of:
-  1. [PRIMARY CLAIM ITEM]: Definitive primary procedure for a given site/tooth.
-  2. [CO-BILLABLE PROCEDURE]: Distinct concurrent therapeutic service on a separate or adjacent tooth/site.
-  3. [CO-BILLABLE DIAGNOSTIC]: Separately billable baseline diagnostics (e.g., OPG 57960-00-00, PA 97022-00-10).
-  4. [PRIOR-AUTH / PLANNED FUTURE SERVICE]: Staged appliances, duplicate radiographic guides, or planned subsequent surgical/prosthetic steps.
-- Competing codes for the same tooth/phase (e.g., Resin RPD vs Cast Metal RPD, or Pulp Cap vs Pulpotomy) must NEVER both appear as billable. Put competing alternatives into the secondary table: "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)".
+def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style):
+    instructions = [BASE_PRINCIPLES, "\nREQUIRED OUTPUT SECTIONS (Generate ONLY the sections explicitly listed below):\n"]
+    sec_num = 1
+    
+    if inc_icd:
+        instructions.append(f"""
+{sec_num}. PRIMARY DIAGNOSIS & ETIOLOGY (ICD-10-AM 10th Ed)
+   - Specific ICD-10-AM code justified by clinical presentation. If site/cause is unspecified, provide code with `[Specify Tooth/Arch]` placeholder.
+""")
+        sec_num += 1
 
-================================================================================
-UNIVERSAL PRINCIPLE 2: "OMIT CODE" ANTI-UNBUNDLING MANDATE (ZERO UNBUNDLING)
-================================================================================
-The CCHI Index explicitly enforces "omit code" instructions for inherent steps:
-- Temporary/provisional crown (97631-00-00) or pontic (97632-00-00) with any other dental procedure: OMIT CODE (bundled).
-- Endodontic irrigation/dressing (97455-00-00) with any other endodontic procedure: OMIT CODE (bundled).
-- Sutures for haemorrhage (97399-00-00) with any other dental procedure: OMIT CODE (bundled).
-- New denture adjustments: OMIT CODE (bundled into delivery).
-- Comprehensive combinations:
-  * Complete bimaxillary dentures MUST use combination code 97719-00-00 [Block 474].
-  * Multi-surface restorations on one tooth MUST be billed as a single composite/amalgam code.
-  * Surgical extraction (97324-01-00) bundles flap, bone removal (ostectomy), sectioning, and suturing.
-- Examination Bundling: Do NOT co-bill routine periodic oral examinations (97012-00-00) alongside active major restorative, endodontic, or prosthodontic procedures for the same encounter unless the patient presented with a distinct, unrelated acute complaint. Routine checks during impressions or try-in visits are bundled into the global service.
-
-================================================================================
-UNIVERSAL PRINCIPLE 3: INHERENT COMPONENTS (STRICTLY NON-BILLABLE)
-================================================================================
-The following are integral components of primary dental procedures and MUST NEVER appear as billable items:
-- Local/regional anesthesia (Block 1909, 92509, 92513) per ACS 0042.
-- Rubber dam isolation, cotton roll isolation, and operative field disinfection.
-- Cavity bases, liners, bonding agents, and matrices.
-- Impression trays, elastomeric/alginate materials, bite registrations, and try-in sessions.
-
-================================================================================
-UNIVERSAL PRINCIPLE 4: SBS v3.0 & ACHI 10TH ED DENTAL NUMERICAL ARCHITECTURE
-================================================================================
-- ACHI Code Column: MUST strictly be 7 digits: `XXXXX-XX` (e.g., 97722-00, 97679-00, 57960-00).
-- SBS v3.0 Code Column: MUST strictly be 9 digits: `XXXXX-XX-XX` (e.g., 97722-00-00, 97679-00-00, 57960-00-00).
-- Block Column: Provide the official block in brackets (e.g., [474], [473], [451]).
-- Never use fictional alphanumeric prefixes (e.g., no DEN.* or RAD.*).
-
-================================================================================
-UNIVERSAL PRINCIPLE 5: ANTI-HALLUCINATION & MANDATORY BLANK PLACEHOLDERS
-================================================================================
-STRICT MEDICO-LEGAL SAFETY DIRECTIVE:
-You are FORBIDDEN from guessing, suggesting, or pre-filling anatomical numbers, materials, or measurements not explicitly stated by the user. Keep placeholders strictly blank:
-- Teeth: `[Specify Missing Teeth FDI: #___]` and `[Specify Abutment Teeth FDI: #___]`. NEVER suggest specific tooth numbers.
-- Classifications: `[Specify Kennedy Class: I / II / III / IV, Mod: ___]`, `[Specify Black's Class: I / II / III / IV / V]`.
-- Measurements: `[Specify Probing Depth: ___ mm]`, `[Specify Bone Height: ___ mm]`.
-- Materials: `[Specify Material: PVS / Polyether / Alginate]`, `[Specify Shade: VITA ___]`.
-
-================================================================================
-REQUIRED OUTPUT STRUCTURE
-================================================================================
-1. PRIMARY DIAGNOSIS & ETIOLOGY (ICD-10-AM 10th Ed)
-   - Specific ICD-10-AM codes justified by clinical presentation. If site/cause is unspecified, provide code with `[Specify Tooth/Arch]` placeholder.
-
-2. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
+    if inc_billing:
+        instructions.append(f"""
+{sec_num}. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
    - Table columns MUST strictly be:
      `Service Description` | `ACHI Code` | `SBS v3.0 Code` | `Block` | `Claim Action Flag` | `Govt Tariff (SAR)* [Art. 11]` | `Bundled Elements (NON-BILLABLE)`
-   - Tariff Column: Output realistic numeric statutory rates benchmarked to Article 11 (e.g., 120.00, 450.00, 850.00, 1,400.00).
-   - Immediately below the table, include this exact mandatory statutory footnote:
-     `*Tariff prices are determined in accordance with Article 11: "Dental services pricing in government sector".`
-   - If mutually exclusive alternatives exist, output a separate small table below it titled:
-     "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)"
+   - Tariff Column: Output realistic numeric statutory rates benchmarked to Article 11 (e.g., 120.00, 450.00, 850.00).
+   - Immediately below the table, include: `*Tariff prices are determined in accordance with Article 11: "Dental services pricing in government sector".`
+   - If mutually exclusive alternatives exist, output a sub-table: "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)".
+""")
+        sec_num += 1
 
-3. CLINICIAN'S RAPID PRE-FLIGHT CHECKLIST (CCHI / NPHIES)
-   - Concise, single-line checkmarks:
+    if inc_checklist:
+        instructions.append(f"""
+{sec_num}. CLINICIAN'S RAPID PRE-FLIGHT CHECKLIST (CCHI / NPHIES)
+   - Concise single-line checkmarks:
      * [ ] **Anatomical Site:** Tooth / Arch identifier.
      * [ ] **Required Radiograph:** Mandatory imaging attachments.
      * [ ] **Clinical Justification:** Clear objective criteria.
      * [ ] **Prior Authorization:** Status under NPHIES rules.
      * [ ] **#1 Denial Trap:** Primary pitfall to avoid.
+""")
+        sec_num += 1
 
-4. AUDIT-PROOF EMR SOAP CLINICAL PROGRESS NOTE
-   - STRICT EMR FORMATTING CONSTRAINT: Do NOT include patient demographics (no Patient Name, MRN, Date of Service, Age, Gender brackets). Do NOT include doctor signature lines, provider credential blocks, SCFHS license numbers, or NPHIES provider IDs.
-   - The note MUST start directly with:
-     **Encounter Specialty:** [e.g., Prosthodontics, Endodontics, Oral & Maxillofacial Surgery, Restorative Dentistry, Pediatric Dentistry, Periodontics]
-   - Follow immediately with the clinical record:
-     **SUBJECTIVE (S):**
-     **OBJECTIVE (O):**
-     **ASSESSMENT (A):**
-     **PLAN & PROCEDURE (P):**
-     **POST-OPERATIVE INSTRUCTIONS & FOLLOW-UP:**
-"""
+    if note_style == "⚡ Concise SmartForm Macro (Hospital Template)":
+        instructions.append(f"""
+{sec_num}. AUDIT-PROOF EMR CLINICAL NOTE (CONCISE SMARTFORM MACRO)
+   - STRICT FORMAT RULE: Do NOT generate multi-paragraph SOAP essays. Output a rapid, modular EMR Macro matching native hospital SmartForms.
+   - NO patient demographics or doctor signature blocks.
+   - Structure strictly as follows:
+     **Encounter Specialty:** [Specialty Name]
+     **Procedure:** [Definitive Procedure Name]
+     **Tooth / Site:** [Tooth FDI #___ / Arch / Quadrant]
+     **Anesthesia:** [None / Infiltration: Specify Agent & Dose]
+     **Radiographs:** [None / Pre-op PA / Post-op PA: Specify Finding]
+     **Patient Status:** [Cooperative / Mild Sensitivity / Asymptomatic]
+     **Clinical Procedure:** [Short factual lines detailing steps: provisional removal, debridement, prep verification, try-in checks].
+     **Materials / Delivery:** [Use discrete multi-choice pickers: e.g., [RelyX Luting / Resin Cement / GI Cement]].
+     **Post-Op & Follow-Up:** [Concise 1-line home care instruction and recall timeframe].
+""")
+    elif note_style == "📋 Elaborate SOAP Note (Academic / Hospital Narrative)":
+        instructions.append(f"""
+{sec_num}. AUDIT-PROOF EMR SOAP CLINICAL PROGRESS NOTE (NARRATIVE)
+   - Comprehensive narrative medical record. NO patient demographics or signature blocks.
+   - Structure:
+     **Encounter Specialty:** [Specialty Name]
+     **SUBJECTIVE (S):** Detailed chief complaint, HPI, and medical history.
+     **OBJECTIVE (O):** Detailed extraoral, intraoral, periodontal charting, and radiographic findings.
+     **ASSESSMENT (A):** Definitive diagnoses linked to ICD-10-AM and clinical rationale.
+     **PLAN & PROCEDURE (P):** Detailed itemized execution steps, isolation, materials, and staged plan.
+     **POST-OPERATIVE INSTRUCTIONS & FOLLOW-UP:** Home care protocols, pain management, and recall interval.
+""")
 
-def generate_scrubbed_package(client, doctor_input, cchi_text):
-    """Executes call using Gemini Flash with fallback resilience and index grounding."""
+    return "".join(instructions)
+
+def generate_scrubbed_package(client, doctor_input, cchi_text, system_instruction):
+    """Executes call using Gemini Flash with dynamic configuration."""
     models = ["gemini-3.7-flash", "gemini-3.6-flash"]
     last_error = None
 
@@ -199,7 +184,7 @@ CLINICIAN ENCOUNTER CASE SUMMARY:
                     model=model_name,
                     contents=prompt_payload,
                     config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTIONS,
+                        system_instruction=system_instruction,
                         temperature=0.1,
                     )
                 )
@@ -223,23 +208,52 @@ with col_in:
     st.subheader("📝 Clinician Input")
     doctor_input = st.text_area(
         "Enter clinical case summary (any dental specialty):",
-        placeholder="e.g.:\n- second visit , missing lower posterior teeth case referred for acrylic RPD, before creating a replica surgical/radiographic guide to plan and refer for dental implants\n- 13 yo trauma tooth 11, pulp exposure, vital pulp therapy\n- tooth 48 impacted, ostectomy and sectioning",
-        height=220
+        placeholder="e.g.:\n- second visit, missing lower posterior teeth case referred for acrylic RPD, before creating a replica surgical guide\n- crown cementation tooth 26 zirconia\n- 9yo vital pulp therapy tooth 34",
+        height=180
     )
-    submit_btn = st.button("🚀 Audit Case & Generate EMR Note", type="primary", use_container_width=True)
+    
+    # Customization Controls
+    st.markdown("##### ⚙️ Customize Output Package")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        inc_icd = st.checkbox("ICD-10-AM Diagnosis", value=True)
+    with c2:
+        inc_billing = st.checkbox("SBS v3.0 / ACHI Table", value=True)
+    with c3:
+        inc_checklist = st.checkbox("NPHIES Checklist", value=True)
+        
+    note_style = st.radio(
+        "Clinical Note Format:",
+        [
+            "⚡ Concise SmartForm Macro (Hospital Template)",
+            "📋 Elaborate SOAP Note (Academic / Hospital Narrative)",
+            "🚫 Skip Clinical Note (Coding Only)"
+        ],
+        index=0
+    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    submit_btn = st.button("🚀 Audit Case & Generate Package", type="primary", use_container_width=True)
 
 with col_out:
-    st.subheader("📋 Audit & Coding Package")
+    st.subheader("📋 Audit & Coding Output")
     if submit_btn:
         if not api_key:
-            st.error("Missing Gemini API Key. Please add it in the sidebar or Streamlit secrets.")
+            st.error("Missing Gemini API Key. Please enter it in the sidebar or Streamlit secrets.")
         elif not doctor_input.strip():
             st.warning("Please enter a case summary first.")
+        elif not (inc_icd or inc_billing or inc_checklist or note_style != "🚫 Skip Clinical Note (Coding Only)"):
+            st.warning("Please select at least one output section to generate.")
         else:
-            with st.spinner("Searching official CCHI SBS v3 Dental Index & scrubbing claim..."):
+            with st.spinner("Auditing claim against CCHI SBS v3 Index & generating customized package..."):
                 try:
                     client = genai.Client(api_key=api_key)
-                    result_text = generate_scrubbed_package(client, doctor_input, cchi_index_text)
+                    dynamic_sys_instruction = construct_dynamic_instructions(
+                        inc_icd, inc_billing, inc_checklist, note_style
+                    )
+                    result_text = generate_scrubbed_package(
+                        client, doctor_input, cchi_index_text, dynamic_sys_instruction
+                    )
                     st.markdown(result_text)
                 except Exception as e:
                     st.error(f"Service temporarily busy: {str(e)}")
