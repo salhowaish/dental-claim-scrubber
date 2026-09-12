@@ -9,12 +9,16 @@ st.set_page_config(
     layout="wide"
 )
 
+# Header & Branding
 st.title("🦷 Saudi Dental Documentation & Claim Scrubber")
 st.markdown("Automated CCHI/NPHIES Medical Necessity Engine • SBS v3.0 & ACHI Coding • Audit-Proof Epic Notes")
 st.divider()
 
-# Get API key from Secrets or sidebar
+# API Key handling: uses Streamlit Secrets if available, otherwise asks user in sidebar
 api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.sidebar.text_input("Gemini API Key", type="password")
+
+if not api_key:
+    st.sidebar.info("💡 Add `GEMINI_API_KEY` into Streamlit App Secrets to keep this unlocked.")
 
 SYSTEM_INSTRUCTIONS = """
 You are an expert Certified Professional Coder (CPC), Dental Revenue Cycle Auditor, and Clinical Documentation Specialist in Saudi Arabia.
@@ -36,12 +40,13 @@ Enforce Australian Coding Standards (ACS 0042), ACHI 10th Edition, SBS v3.0, and
    - Generate a standardized, legally defensible, accreditation-ready (CCHI / CBAHI) SOAP note ready to copy directly into Epic.
 """
 
-def generate_with_retry(client, prompt, max_retries=3):
-    """Retries silently if Google servers experience momentary high demand (503/429)."""
-    models_to_try = ["gemini-3.7-flash", "gemini-2.0-flash"]
-    
-    for model_name in models_to_try:
-        for attempt in range(max_retries):
+def generate_with_resilience(client, prompt):
+    """Retries automatically on 503 demand spikes and falls back to flash backup."""
+    models = ["gemini-2.5-flash", "gemini-1.5-flash"]
+    last_error = None
+
+    for model_name in models:
+        for attempt in range(3):
             try:
                 response = client.models.generate_content(
                     model=model_name,
@@ -53,16 +58,15 @@ def generate_with_retry(client, prompt, max_retries=3):
                 )
                 return response.text
             except Exception as e:
-                err_str = str(e)
-                # If server is overloaded (503) or rate-limited (429), wait and retry
-                if ("503" in err_str or "429" in err_str) and attempt < max_retries - 1:
-                    time.sleep(2 * (attempt + 1))
+                last_error = e
+                err_text = str(e)
+                # If server spikes with 503 (high demand) or 429, wait briefly and retry
+                if "503" in err_text or "429" in err_text:
+                    time.sleep(1.5 * (attempt + 1))
                     continue
-                elif attempt == max_retries - 1 and model_name != models_to_try[-1]:
-                    # Move to fallback model
-                    break
                 else:
-                    raise e
+                    break  # Break to next model on non-transient error
+    raise last_error
 
 col_in, col_out = st.columns([1, 1], gap="large")
 
@@ -79,14 +83,14 @@ with col_out:
     st.subheader("📋 Audit & Coding Package")
     if submit_btn:
         if not api_key:
-            st.error("Missing Gemini API Key.")
+            st.error("Please enter a Gemini API Key in the left sidebar or Secrets.")
         elif not doctor_input.strip():
             st.warning("Please type a case summary on the left.")
         else:
-            with st.spinner("Scrubbing against CCHI standards (handling server traffic)..."):
+            with st.spinner("Scrubbing against CCHI Minimum Data Set & SBS v3.0 bundling rules..."):
                 try:
                     client = genai.Client(api_key=api_key)
-                    result_text = generate_with_retry(client, doctor_input)
+                    result_text = generate_with_resilience(client, doctor_input)
                     st.markdown(result_text)
                 except Exception as e:
-                    st.error(f"System busy. Please tap Generate again in a few seconds: {str(e)}")
+                    st.error(f"High traffic spike. Please tap the button again: {str(e)}")
