@@ -113,8 +113,11 @@ REQUIRED OUTPUT STRUCTURE
    - Specific ICD-10-AM codes justified by clinical presentation.
 
 2. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
-   - Columns: Service Description | ACHI Code | SBS v3.0 Code | Claim Action Flag | Tariff (SAR) | Bundled Elements
+   - Table columns MUST strictly be:
+     `Service Description` | `ACHI Code` | `SBS v3.0 Code` | `Claim Action Flag` | `Govt Tariff (SAR)* [Art. 11]` | `Bundled Elements (NON-BILLABLE)`
    - Co-billable diagnostics (e.g., pre-op PA) go here as [CO-BILLABLE DIAGNOSTIC].
+   - Immediately below the table, include this exact mandatory statutory footnote:
+     `*Tariff prices are determined in accordance with Article 11: "Dental services pricing in government sector".`
    - If mutually exclusive alternatives exist, output a separate small table below it titled:
      "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)"
 
