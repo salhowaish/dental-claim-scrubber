@@ -195,10 +195,7 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
     return "".join(instructions)
 
 def generate_scrubbed_package(client, doctor_input, cchi_text, system_instruction):
-    """Executes call using production Gemini Flash with automatic retry resilience."""
-    models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
-    last_error = None
-
+    """Executes call using Gemini 3.7 Flash with retry resilience."""
     prompt_payload = f"""
 OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX REFERENCE (ATTACHED GROUND TRUTH):
 {cchi_text if cchi_text else "[Built-in ACHI/SBS Knowledge Active]"}
@@ -206,24 +203,22 @@ OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX REFERENCE (ATTACHED GROUND T
 CLINICIAN ENCOUNTER CASE SUMMARY:
 {doctor_input}
 """
-
-    for model_name in models_to_try:
-        for attempt in range(2):
-            try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt_payload,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_instruction,
-                        temperature=0.1,
-                    )
+    for attempt in range(2):
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.7-flash",
+                contents=prompt_payload,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.1,
                 )
-                return response.text
-            except Exception as e:
-                last_error = e
+            )
+            return response.text
+        except Exception as e:
+            if attempt == 0:
                 time.sleep(1)
                 continue
-    raise last_error
+            raise e
 
 # ==========================================
 # UI LAYOUT
