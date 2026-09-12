@@ -68,7 +68,6 @@ with st.sidebar:
         st.warning("⚠️ `sbs_dental_index.pdf` not found in repo root. Using prompt fallback.")
     st.markdown("---")
 
-    # API Key Handling
     api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.text_input("Gemini API Key", type="password")
     if not api_key:
         st.info("💡 Add `GEMINI_API_KEY` into Streamlit App Secrets to keep this permanently unlocked.")
@@ -79,7 +78,7 @@ with st.sidebar:
 st.title("🦷 Saudi Dental Documentation & Claim Scrubber")
 st.markdown(
     "**Clinical AI Engine by Dr. Sulaiman Alhowaish (SB-Pros, CPC, MSc Insurance, IBM AI)**  \n"
-    "*Grounded in Official CCHI SBS v3.0 Dental Index • ACHI 10th Ed • Customizable EMR Outputs*"
+    "*Grounded in Official CCHI SBS v3.0 Dental Index • ACHI 10th Ed • Multi-Visit Episode Protection*"
 )
 st.divider()
 
@@ -91,16 +90,47 @@ You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Do
 You are provided with the full text of the official Council of Health Insurance (CCHI) Saudi Billing System (SBS) Version 3 Dental Alphabetic Index.
 You MUST search this index to identify the exact 9-digit SBS code, the 7-digit ACHI code, and the [Block] number for any dental intervention.
 
-Enforce the following Universal Principles:
-1. GROUNDING & ACTION FLAGS: Look up procedures using CCHI Lead Terms. Assign: [PRIMARY CLAIM ITEM], [CO-BILLABLE PROCEDURE], [CO-BILLABLE DIAGNOSTIC], or [PRIOR-AUTH / PLANNED FUTURE SERVICE]. Place competing alternatives for the same site in "⚠️ Mutually Exclusive Alternatives".
+Enforce the following 6 Universal Principles:
+1. GROUNDING & ACTION FLAGS: Look up procedures using CCHI Lead Terms. Assign: [PRIMARY CLAIM ITEM], [CO-BILLABLE PROCEDURE], [CO-BILLABLE DIAGNOSTIC], [IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE], or [PRIOR-AUTH / PLANNED FUTURE SERVICE]. Place competing alternatives for the same site in "⚠️ Mutually Exclusive Alternatives".
 2. ZERO UNBUNDLING: Obey CCHI "omit code" instructions (e.g., temporary crowns/bridges, dressings/irrigations, sutures for hemorrhage, new denture adjustments are all bundled). Bimaxillary dentures must use omnibus 97719-00-00 [474]. Multi-surface restorations use single combination codes.
-3. INHERENT COMPONENTS: Local anesthesia (Block 1909), isolation, cavity bases/liners, and impression trays/materials are strictly non-billable.
+3. INHERENT COMPONENTS: Local anesthesia (Block 1909), isolation, cavity bases/liners, impression trays/materials, bite registrations, and try-ins are strictly non-billable.
 4. DIGIT VALIDATION: ACHI Code = strictly 7 digits (XXXXX-XX). SBS Code = strictly 9 digits (XXXXX-XX-XX). Always include the [Block].
 5. MANDATORY BLANK PLACEHOLDERS: NEVER guess or pre-fill tooth numbers, measurements, or materials not stated by the user. Use strictly blank placeholders: `[Specify FDI Tooth: #___]`, `[Specify Probing Depth: ___ mm]`, `[Specify Material: ___]`.
+
+================================================================================
+UNIVERSAL PRINCIPLE 6: MULTI-VISIT CONTINUITY & EPISODE BUNDLING LOCK
+================================================================================
+1. EPISODE STAGING ADJUDICATION:
+   - If the clinician's input contains an existing "NPHIES CASE CONTINUITY BLOCK", or if the case is identified as an intermediate stage of a global service (e.g., RPD Visit 1-3, Crown Prep Visit 1, or RCT Step 1):
+     * Intermediate Visits: The primary procedure Claim Action Flag MUST be set to `[IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE]`.
+     * The Tariff MUST be output as `0.00 SAR` (Claim locked until final delivery/cementation/obturation per CCHI global pricing rules).
+     * Strictly warn against unbundling routine exams (97012-00-00), impressions, or jaw relations on intermediate visits.
+   - Final Delivery Visits (e.g., RPD Insertion Visit 4, Crown Cementation Visit 2, or RCT Final Obturation):
+     * The procedure unlocks as `[PRIMARY CLAIM ITEM - GLOBAL DEFINITIVE]`.
+     * The full Article 11 tariff is billed (e.g., 850.00 SAR for RPD, 1,250.00 SAR for Zirconia crown).
+
+2. MANDATORY CASE CONTINUITY BLOCK GENERATION:
+   At the very end of EVERY generated output, append this exact, copy-pasteable metadata block:
+
+   ================================================================================
+   🔄 NPHIES CASE CONTINUITY BLOCK (Copy & paste into next visit prompt)
+   ================================================================================
+   [EPISODE_ID]: [Specialty]-[Procedure]-[FDI Site]
+   [PRIMARY_SBS_CODE]: [SBS 9-digit Code] [Block]
+   [CURRENT_STAGE]: Visit [X] of [Total Estimated Visits] — [Description of Today's Completed Step]
+   [BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
+   [NEXT_VISIT_EXPECTED]: Visit [X+1] — [Description of Next Clinical Step]
+   [ANTI-UNBUNDLING_LOCK]: LOCKED — Inherent intermediate steps must NOT be billed separately.
+   ================================================================================
 """
 
-def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style):
-    instructions = [BASE_PRINCIPLES, "\nREQUIRED OUTPUT SECTIONS (Generate ONLY the sections explicitly listed below):\n"]
+def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway):
+    instructions = [BASE_PRINCIPLES]
+    
+    if is_staged and staged_pathway != "Auto-detect from case input":
+        instructions.append(f"\nACTIVE WORKFLOW PRE-SET: Clinician selected multi-visit pathway: {staged_pathway}. Accurately align the episode stages and billing locks with this pathway.\n")
+        
+    instructions.append("\nREQUIRED OUTPUT SECTIONS (Generate ONLY the sections explicitly listed below):\n")
     sec_num = 1
     
     if inc_icd:
@@ -115,7 +145,7 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 {sec_num}. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
    - Table columns MUST strictly be:
      `Service Description` | `ACHI Code` | `SBS v3.0 Code` | `Block` | `Claim Action Flag` | `Govt Tariff (SAR)* [Art. 11]` | `Bundled Elements (NON-BILLABLE)`
-   - Tariff Column: Output realistic numeric statutory rates benchmarked to Article 11 (e.g., 120.00, 450.00, 850.00).
+   - Tariff Column: Output realistic numeric statutory rates benchmarked to Article 11 (e.g., 0.00 for locked in-progress visits; 850.00 for definitive RPD delivery).
    - Immediately below the table, include: `*Tariff prices are determined in accordance with Article 11: "Dental services pricing in government sector".`
    - If mutually exclusive alternatives exist, output a sub-table: "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)".
 """)
@@ -128,7 +158,7 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
      * [ ] **Anatomical Site:** Tooth / Arch identifier.
      * [ ] **Required Radiograph:** Mandatory imaging attachments.
      * [ ] **Clinical Justification:** Clear objective criteria.
-     * [ ] **Prior Authorization:** Status under NPHIES rules.
+     * [ ] **Prior Authorization / Episode Status:** Status under NPHIES rules.
      * [ ] **#1 Denial Trap:** Primary pitfall to avoid.
 """)
         sec_num += 1
@@ -145,8 +175,8 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
      **Anesthesia:** [None / Infiltration: Specify Agent & Dose]
      **Radiographs:** [None / Pre-op PA / Post-op PA: Specify Finding]
      **Patient Status:** [Cooperative / Mild Sensitivity / Asymptomatic]
-     **Clinical Procedure:** [Short factual lines detailing steps: provisional removal, debridement, prep verification, try-in checks].
-     **Materials / Delivery:** [Use discrete multi-choice pickers: e.g., [RelyX Luting / Resin Cement / GI Cement]].
+     **Clinical Procedure:** [Short factual lines detailing steps performed today].
+     **Materials / Delivery:** [Use discrete multi-choice pickers: e.g., [PVS / Polyether / Alginate] or [RelyX / Resin / GI]].
      **Post-Op & Follow-Up:** [Concise 1-line home care instruction and recall timeframe].
 """)
     elif note_style == "📋 Elaborate SOAP Note (Academic / Hospital Narrative)":
@@ -207,13 +237,12 @@ col_in, col_out = st.columns([1, 1], gap="large")
 with col_in:
     st.subheader("📝 Clinician Input")
     doctor_input = st.text_area(
-        "Enter clinical case summary (any dental specialty):",
-        placeholder="e.g.:\n- second visit, missing lower posterior teeth case referred for acrylic RPD, before creating a replica surgical guide\n- crown cementation tooth 26 zirconia\n- 9yo vital pulp therapy tooth 34",
-        height=180
+        "Enter clinical case summary (paste previous Continuity Block here for follow-up visits):",
+        placeholder="e.g.:\n- second visit, missing lower posterior teeth case referred for acrylic RPD\n- or paste the [NPHIES CASE CONTINUITY BLOCK] from the previous appointment along with today's notes",
+        height=170
     )
     
-    # Customization Controls
-    st.markdown("##### ⚙️ Customize Output Package")
+    st.markdown("##### ⚙️ Output Package Customization")
     c1, c2, c3 = st.columns(3)
     with c1:
         inc_icd = st.checkbox("ICD-10-AM Diagnosis", value=True)
@@ -232,6 +261,26 @@ with col_in:
         index=0
     )
     
+    st.markdown("---")
+    is_staged = st.checkbox(
+        "🔄 Multi-Visit / Staged Episode Tracker", 
+        value=True, 
+        help="Locks intermediate stages to 0.00 SAR to prevent premature unbundled billing, unlocking the global fee only at final delivery."
+    )
+    staged_pathway = "Auto-detect from case input"
+    if is_staged:
+        staged_pathway = st.selectbox(
+            "Select Clinical Pathway (Preset Workflow):",
+            [
+                "Auto-detect from case input",
+                "Removable Partial Denture (RPD) — [4 Visits: Primary Imp -> Master Imp/Bite -> Try-In -> Delivery]",
+                "Complete Dentures (Full Arch / Bimaxillary) — [5 Visits: Imp 1 -> Border Mold/Imp 2 -> Jaw Relation -> Try-In -> Delivery]",
+                "Indirect Crown / Bridge — [2 Visits: Prep/Impression/Provisional -> Final Cementation]",
+                "Multi-Visit Endodontics (RCT) — [2 Visits: Emergency Pulpectomy/Dressing -> Final Obturation]",
+                "Implant Stage Protocol — [Staged: Surgical Placement -> Stage-2 Exposure -> Final Impression -> Prosthesis Delivery]"
+            ]
+        )
+    
     st.markdown("<br>", unsafe_allow_html=True)
     submit_btn = st.button("🚀 Audit Case & Generate Package", type="primary", use_container_width=True)
 
@@ -245,11 +294,11 @@ with col_out:
         elif not (inc_icd or inc_billing or inc_checklist or note_style != "🚫 Skip Clinical Note (Coding Only)"):
             st.warning("Please select at least one output section to generate.")
         else:
-            with st.spinner("Auditing claim against CCHI SBS v3 Index & generating customized package..."):
+            with st.spinner("Auditing claim against CCHI SBS v3 Index & checking episode continuity..."):
                 try:
                     client = genai.Client(api_key=api_key)
                     dynamic_sys_instruction = construct_dynamic_instructions(
-                        inc_icd, inc_billing, inc_checklist, note_style
+                        inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
                     )
                     result_text = generate_scrubbed_package(
                         client, doctor_input, cchi_index_text, dynamic_sys_instruction
