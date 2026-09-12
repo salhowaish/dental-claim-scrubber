@@ -7,11 +7,134 @@ from google import genai
 from google.genai import types
 
 st.set_page_config(
-    page_title="Saudi Dental Claim Scrubber",
-    page_icon="🦷",
+    page_title="DENTIX | Clinical & Revenue Intelligence",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ==========================================
+# ENTERPRISE CLINICAL CSS THEME
+# ==========================================
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    /* Top Bar & Branding */
+    .brand-header {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .brand-title {
+        font-size: 1.85rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #F8FAFC;
+        margin-bottom: 0.25rem;
+    }
+    .brand-subtitle {
+        font-size: 0.88rem;
+        font-weight: 400;
+        color: #94A3B8;
+        line-height: 1.4;
+    }
+    
+    /* Tag Pills */
+    .tag-pill {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 9999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        background: rgba(14, 165, 233, 0.12);
+        color: #38BDF8;
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        margin-right: 0.35rem;
+    }
+    .tag-pill-gold {
+        background: rgba(245, 158, 11, 0.12);
+        color: #FBBF24;
+        border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    
+    /* Profile & Metadata Card */
+    .profile-card {
+        background: rgba(30, 41, 59, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 1.15rem;
+        margin-bottom: 1.25rem;
+    }
+    .profile-name {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #F8FAFC;
+        margin-bottom: 0.15rem;
+    }
+    .profile-role {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #38BDF8;
+        margin-bottom: 0.1rem;
+    }
+    .profile-org {
+        font-size: 0.76rem;
+        color: #94A3B8;
+        line-height: 1.35;
+        margin-bottom: 0.65rem;
+    }
+    .profile-contact {
+        font-size: 0.74rem;
+        color: #CBD5E1;
+        line-height: 1.6;
+        padding-top: 0.6rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .profile-contact a {
+        color: #38BDF8;
+        text-decoration: none;
+    }
+    .profile-contact a:hover {
+        text-decoration: underline;
+    }
+    
+    /* Section Headings */
+    .sub-section-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #64748B;
+        margin-top: 0.9rem;
+        margin-bottom: 0.35rem;
+    }
+    
+    /* Input Container Box */
+    .stTextArea textarea {
+        border-radius: 8px !important;
+        font-size: 0.88rem !important;
+        line-height: 1.5 !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        background-color: rgba(15, 23, 42, 0.5) !important;
+    }
+    
+    /* Primary Button Styling */
+    div.stButton > button:first-child {
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.88rem;
+        letter-spacing: 0.01em;
+        padding: 0.55rem 1.2rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # CACHED CCHI DENTAL INDEX EXTRACTOR
@@ -35,55 +158,67 @@ def load_cchi_dental_index():
 cchi_index_text = load_cchi_dental_index()
 
 # ==========================================
-# SIDEBAR: CLINICAL ARCHITECT & CREDENTIALS
+# SIDEBAR: EXECUTIVE ARCHITECT & CREDENTIALS
 # ==========================================
 with st.sidebar:
-    st.markdown("### 👨‍⚕️ Developed & Architected By")
-    st.markdown("## **Dr. Sulaiman Alhowaish**")
-    st.markdown("*Specialist Prosthodontist • Healthcare Revenue Cycle & Medical AI Specialist*")
-    st.markdown("---")
-    
-    st.markdown("#### 🎓 Board & Academic Credentials")
     st.markdown("""
-    * **Saudi Board in Prosthodontics (SB-Pros)**  
-      *Specialist in Fixed, Removable & Implant Prosthodontics*
-    * **Executive Master's Degree in Insurance**  
-      *King Saud University (KSU)*
-    * **Bachelor of Dental Surgery (BDS)**
-    """)
-    
-    st.markdown("#### 📜 Professional Certifications")
+    <div class="profile-card">
+        <div class="profile-name">Dr. Sulaiman Alhowaish</div>
+        <div class="profile-role">Deputy Manager, Dental Department</div>
+        <div class="profile-org">
+            Alyamamah Hospital<br>
+            Riyadh Second Health Cluster (R2)
+        </div>
+        <div class="profile-contact">
+            <strong>Mobile:</strong> <a href="tel:+966508172926">+966 50 817 2926</a><br>
+            <strong>Email:</strong> <a href="mailto:s.alhowaish@gmail.com">s.alhowaish@gmail.com</a><br>
+            <strong>Specialty:</strong> Prosthodontist & Healthcare RCM
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="sub-section-title">Clinical & Regulatory Qualifications</div>', unsafe_allow_html=True)
     st.markdown("""
-    * **Certified Professional Coder (CPC®)**  
-      *American Academy of Professional Coders (AAPC)*
-    * **IBM Professional Certificate in Artificial Intelligence**  
-      *Applied AI & Machine Learning in Healthcare & Medicine*
+    * **SB-Pros** | Saudi Board in Prosthodontics  
+    * **MSc** | Executive Master in Health Insurance (KSU)  
+    * **BDS** | Bachelor of Dental Surgery  
+    * **CPC®** | Certified Professional Coder (AAPC)  
+    * **IBM AI** | Professional Certificate in Artificial Intelligence
     """)
-    st.markdown("---")
-    
-    st.markdown("#### 📖 Grounding Engine Status")
+
+    st.markdown('<div class="sub-section-title">Clearinghouse & Grounding Integrity</div>', unsafe_allow_html=True)
     if cchi_index_text:
-        st.success("✅ CCHI SBS v3 Dental Index Active (19 Pages Grounded)")
+        st.success("CCHI SBS v3.0 Ground Truth: Active (19 Pages)")
     else:
-        st.warning("⚠️ `sbs_dental_index.pdf` not found in repo root. Using prompt fallback.")
-    st.markdown("---")
+        st.warning("Index PDF missing. Relying on verified internal nomenclature.")
 
     api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.text_input("Gemini API Key", type="password")
     if not api_key:
-        st.info("💡 Add `GEMINI_API_KEY` into Streamlit App Secrets to keep this permanently unlocked.")
+        st.caption("Store `GEMINI_API_KEY` in Streamlit Secrets for unauthenticated sessions.")
 
 # ==========================================
-# MAIN HEADER
+# MAIN INTERFACE HEADER
 # ==========================================
-st.title("🦷 Saudi Dental Documentation & Claim Scrubber")
-st.markdown(
-    "**Clinical AI Engine by Dr. Sulaiman Alhowaish (SB-Pros, CPC, MSc Insurance, IBM AI)**  \n"
-    "*Hospital-Grade Engine • Grounded in CCHI SBS v3.0 • ACHI 10th Ed • ICD-10-AM Diagnostic Locking*"
-)
-st.divider()
+st.markdown("""
+<div class="brand-header">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+            <div class="brand-title">DENTIX · Clinical Intelligence Engine</div>
+            <div class="brand-subtitle">
+                Autonomous Clinical Documentation & NPHIES SBS v3.0 Regulatory Compliance Scrubber
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <span class="tag-pill">SBS v3.0</span>
+            <span class="tag-pill">ACHI 10th Ed</span>
+            <span class="tag-pill-gold">NPHIES Core</span>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ==========================================
-# HARDENED GROUND-TRUTH SYSTEM INSTRUCTIONS
+# PROMPT LOGIC & REGULATORY PRINCIPLES
 # ==========================================
 BASE_PRINCIPLES = """
 You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Documentation Auditor in Saudi Arabia.
@@ -95,34 +230,40 @@ CRITICAL RULE: ICD-10-AM 10TH EDITION SPECIFICITY & DIAGNOSTIC LOCK
 ================================================================================
 1. USE ONLY AUSTRALIAN 10TH EDITION CODES (NEVER USE RETIRED CODES):
    - Edentulism / Loss of teeth: Use K08.41 (Complete edentulism, both jaws), K08.42 (Complete edentulism, single jaw), K08.43 (Partial edentulism, multiple missing), K08.44 (Partial edentulism, single missing). NEVER USE K08.1 (RETIRED).
+   - Defective Restorations: Use K08.51 (Aesthetic failure), K08.52 (Overhang/defective margin/gap), K08.53 (Fractured restoration). NEVER USE K08.87.
    - Caries: K02.51, K02.52, K02.53 (Arrested/enamel/dentin with pulp involvement), K02.61, K02.62, K02.63 (Smooth surface), K02.71, K02.72 (Root caries).
    - Pulpal / Periapical: K04.01 (Reversible pulpitis), K04.02 (Irreversible pulpitis), K04.1 (Necrosis of pulp), K04.5 (Chronic apical periodontitis), K04.7 (Periapical abscess without sinus).
    - Periodontal: K05.10 (Chronic gingivitis), K05.31 (Chronic periodontitis, localized), K05.32 (Chronic periodontitis, generalized).
    - Surgical / Impacted: K01.1 (Impacted teeth), K01.0 (Embedded teeth).
-   - Trauma: S02.51 (Fracture of tooth enamel only), S02.52 (Fracture of crown without pulp), S02.53 (Fracture of crown with pulp), S03.2X1 (Luxation of tooth).
+   - Trauma: S02.51 (Enamel fracture), S02.52 (Crown fracture without pulp), S02.53 (Crown fracture with pulp), S03.2X1 (Luxation).
 
 2. DIAGNOSTIC IMMUTABILITY RULE (ANTI-DRIFT):
-   - If clinician input contains an existing "[PRIMARY_ICD10]" in a CONTINUITY BLOCK, YOU MUST LOCK THAT EXACT CODE.
-   - DO NOT alter, generalize, or shift the ICD-10-AM code across follow-up encounters of the same episode.
+   - If clinician input contains an existing "[PRIMARY_ICD10]" in a CONTINUITY BLOCK, YOU MUST RETAIN THAT EXACT CODE.
+   - DO NOT alter, generalize, or shift the ICD-10-AM code across follow-up encounters of the same clinical episode.
 
 ================================================================================
 UNIVERSAL MULTI-VISIT CONTINUITY & ANTI-UNBUNDLING RULES
 ================================================================================
-1. INTERMEDIATE VISITS (Global Bundling):
+1. RENDERED VS. PLANNED SCOPE DISCIPLINE:
+   - ONLY bill procedures that were PHYSICALLY EXECUTED during today's visit.
+   - Services noted as "planned for next visit", "indicated in future", or "pending restorability" MUST NOT appear in the Billable Coding Table for today's encounter.
+   - Day 1 Disassembly / Diagnostic encounters (Exams, Radiographs, Crown sectioning 97655-00-00 [462]) are FULLY BILLABLE fee-for-service events. Do NOT lock them at 0.00 SAR.
+
+2. MULTI-STAGE FABRICATION BUNDLING:
    - RPD/CD Visits 1-4, Indirect Crown/Bridge Visit 1, Multi-visit RCT Stage 1:
-     * Primary Procedure Claim Action Flag MUST BE: `[IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE]`.
-     * Tariff MUST BE: `0.00 SAR`.
-     * Explicitly bundle impressions, bite registrations, wax try-ins, dressing changes, and interim exams.
-2. DEFINITIVE DELIVERY VISITS:
-   - Unlock global code as `[PRIMARY CLAIM ITEM - GLOBAL DEFINITIVE]` with full Article 11 tariff.
-3. CO-BILLABLE PREPARATORY EXCEPTIONS (NEVER OMIT ON VISIT 1):
-   - Core build-up (97627-00-00 [463]), Post/core (97625-00-00 [463]), and Old crown removal (97655-00-00 [462]) ARE NOT BUNDLED into crown prep. Bill them on Visit 1 with their independent tariff.
+     * Primary Procedure Claim Action Flag: `[IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE]`.
+     * Tariff: `0.00 SAR`.
+   - Final Insertion Encounters (e.g., Crown cementation, Denture delivery, RCT obturation):
+     * Unlock code as `[PRIMARY CLAIM ITEM - GLOBAL DEFINITIVE]` with full statutory Article 11 tariff.
+
+3. PREPARATORY EXCEPTIONS & ANATOMICAL MULTIPLICITY:
+   - Crown removal (97655-00-00 [462]) must include specific quantity and FDI tooth identifiers (billed per unit).
+   - Post and core (97625-xx [463]) includes the core. NEVER bill core build-up (97627-00-00 [463]) on the same tooth receiving a post.
 
 ================================================================================
 CRITICAL FORMATTING MANDATE FOR CASE CONTINUITY BLOCK
 ================================================================================
-You MUST output the continuity block enclosed STRICTLY within `<NPHIES_BLOCK>` and `</NPHIES_BLOCK>` tags at the very end of your response.
-DO NOT use markdown headers, equal signs, or formatting inside or around these tags.
+You MUST output the continuity metadata block enclosed STRICTLY between `<NPHIES_BLOCK>` and `</NPHIES_BLOCK>` tags at the very end of your response.
 
 Format inside the tags strictly as:
 <NPHIES_BLOCK>
@@ -130,9 +271,9 @@ Format inside the tags strictly as:
 [PRIMARY_ICD10]: [Code] — [Accurate 10th Ed Description]
 [PRIMARY_SBS_CODE]: [SBS 9-digit Code] [Block]
 [CURRENT_STAGE]: Visit [X] of [Total Visits] — [Description of Today's Step]
-[BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
-[NEXT_VISIT_EXPECTED]: Visit [X+1] — [Description of Next Clinical Step]
-[ANTI-UNBUNDLING_LOCK]: LOCKED — Inherent intermediate steps must NOT be billed separately.
+[BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / BILLABLE ENCOUNTER (Tariff SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
+[NEXT_VISIT_EXPECTED]: Visit [X+1] — [Description of Next Step]
+[ANTI-UNBUNDLING_LOCK]: [LOCKED / EPISODE_ACTIVE / EPISODE_CLOSED]
 </NPHIES_BLOCK>
 """
 
@@ -157,7 +298,7 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 {sec_num}. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
    - Columns MUST strictly be:
      `Service Description` | `ACHI Code` | `SBS v3.0 Code` | `Block` | `Claim Action Flag` | `Govt Tariff (SAR)* [Art. 11]` | `Bundled Elements (NON-BILLABLE)`
-   - Tariff: 0.00 for intermediate locked visits; realistic statutory Article 11 tariff for definitive delivery.
+   - Tariff: 0.00 for intermediate locked visits; realistic statutory Article 11 tariff for standalone or definitive procedures.
    - Immediately below table: `*Tariff prices are determined in accordance with Article 11: "Dental services pricing in government sector".`
    - Sub-table: "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)" if alternatives exist.
 """)
@@ -170,7 +311,7 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 """)
         sec_num += 1
 
-    if note_style == "⚡ Concise SmartForm Macro (Hospital Template)":
+    if note_style == "Concise SmartForm Macro (Hospital Standard)":
         instructions.append(f"""
 {sec_num}. AUDIT-PROOF EMR CLINICAL NOTE (CONCISE SMARTFORM MACRO)
    - DO NOT write multi-paragraph narratives. Output rapid, modular SmartForm lines.
@@ -185,7 +326,7 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
      **Materials / Delivery:** [Multi-choice pickers: e.g., [PVS / Polyether] or [RelyX / Resin / GI]].
      **Post-Op & Follow-Up:** [Concise 1-line home care instruction and recall timeframe].
 """)
-    elif note_style == "📋 Elaborate SOAP Note (Academic / Hospital Narrative)":
+    elif note_style == "Detailed SOAP Clinical Note (Hospital / Academic)":
         instructions.append(f"""
 {sec_num}. AUDIT-PROOF EMR SOAP CLINICAL PROGRESS NOTE (NARRATIVE)
    - Comprehensive narrative medical record: Subjective, Objective, Assessment, Plan & Procedure, Post-Operative Instructions.
@@ -219,19 +360,20 @@ CLINICIAN ENCOUNTER CASE SUMMARY:
             raise e
 
 # ==========================================
-# UI LAYOUT
+# UI LAYOUT & WORKFLOW CONTROLS
 # ==========================================
 col_in, col_out = st.columns([1, 1], gap="large")
 
 with col_in:
-    st.subheader("📝 Clinician Input")
+    st.markdown('<div class="sub-section-title">Clinical Encounter & Episode Record</div>', unsafe_allow_html=True)
     doctor_input = st.text_area(
-        "Enter clinical encounter details (paste previous Continuity Block here for follow-up visits):",
-        placeholder="e.g.:\n- second visit, missing lower posterior teeth case referred for acrylic RPD\n- crown prep and temp tooth 46\n- or paste the Continuity Block from the previous visit along with today's note",
-        height=170
+        label="Clinical Case Input",
+        label_visibility="collapsed",
+        placeholder="Enter encounter details, clinical findings, or paste the NPHIES Case Continuity Token from a prior appointment...",
+        height=180
     )
     
-    st.markdown("##### ⚙️ Output Customization")
+    st.markdown('<div class="sub-section-title">Audit Package Configuration</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
         inc_icd = st.checkbox("ICD-10-AM Diagnosis", value=True)
@@ -241,49 +383,49 @@ with col_in:
         inc_checklist = st.checkbox("NPHIES Checklist", value=True)
         
     note_style = st.radio(
-        "Clinical Note Format:",
+        "EMR Documentation Format:",
         [
-            "⚡ Concise SmartForm Macro (Hospital Template)",
-            "📋 Elaborate SOAP Note (Academic / Hospital Narrative)",
-            "🚫 Skip Clinical Note (Coding Only)"
+            "Concise SmartForm Macro (Hospital Standard)",
+            "Detailed SOAP Clinical Note (Hospital / Academic)",
+            "Coding & Regulatory Audit Only (Skip Note)"
         ],
         index=0
     )
     
-    st.markdown("---")
+    st.markdown('<div class="sub-section-title">Episode Staging Engine</div>', unsafe_allow_html=True)
     is_staged = st.checkbox(
-        "🔄 Multi-Visit / Staged Episode Tracker", 
+        "Enable Multi-Visit Episode Continuity Guard", 
         value=True, 
-        help="Enforces CCHI Episode Billing Rules: Locks intermediate visits to 0.00 SAR and unlocks the full tariff upon final delivery."
+        help="Locks intermediate stages to 0.00 SAR to protect against unbundling rejections, releasing the global tariff on definitive delivery."
     )
     staged_pathway = "Auto-detect from case input"
     if is_staged:
         staged_pathway = st.selectbox(
-            "Select Clinical Pathway (Preset Workflow):",
+            "Target Clinical Pathway:",
             [
                 "Auto-detect from case input",
-                "Indirect Crown / Bridge — [2 Visits: Prep/Impression/Provisional -> Final Cementation]",
-                "Removable Partial Denture (RPD) — [4 Visits: Primary Imp -> Master Imp/Bite -> Try-In -> Delivery]",
-                "Complete Dentures (Full Arch / Bimaxillary) — [5 Visits: Imp 1 -> Border Mold/Imp 2 -> Jaw Relation -> Try-In -> Delivery]",
-                "Multi-Visit Endodontics (RCT) — [2 Visits: Emergency Pulpectomy/Dressing -> Final Obturation]",
-                "Implant Stage Protocol — [Staged: Surgical Placement -> Stage-2 Exposure -> Final Impression -> Prosthesis Delivery]"
+                "Indirect Crown / Bridge — [Prep/Provisional -> Delivery]",
+                "Removable Partial Denture (RPD) — [4-Stage Protocol]",
+                "Complete Dentures (Bimaxillary) — [5-Stage Protocol]",
+                "Endodontics (RCT) — [Biomechanical -> Obturation]",
+                "Implant Prosthetics — [Surgical -> Uncovery -> Impression -> Delivery]"
             ]
         )
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    submit_btn = st.button("🚀 Audit Case & Generate Package", type="primary", use_container_width=True)
+    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+    submit_btn = st.button("Audit Claim & Generate Documentation", type="primary", use_container_width=True)
 
 with col_out:
-    st.subheader("📋 Audit & Coding Output")
+    st.markdown('<div class="sub-section-title">Compliance Audit & Scrubbed Record</div>', unsafe_allow_html=True)
     if submit_btn:
         if not api_key:
-            st.error("Missing Gemini API Key. Please enter it in the sidebar or Streamlit secrets.")
+            st.error("Missing Gemini API credentials. Configure GEMINI_API_KEY in repository secrets.")
         elif not doctor_input.strip():
-            st.warning("Please enter a case summary first.")
-        elif not (inc_icd or inc_billing or inc_checklist or note_style != "🚫 Skip Clinical Note (Coding Only)"):
-            st.warning("Please select at least one output section to generate.")
+            st.warning("Please supply an encounter narrative or case summary.")
+        elif not (inc_icd or inc_billing or inc_checklist or note_style != "Coding & Regulatory Audit Only (Skip Note)"):
+            st.warning("Select at least one output section to compile.")
         else:
-            with st.spinner("Auditing claim against CCHI SBS v3 Index & validating episode state..."):
+            with st.spinner("Scrubbing documentation against CCHI SBS v3.0 & validating NPHIES state..."):
                 try:
                     client = genai.Client(api_key=api_key)
                     dynamic_sys_instruction = construct_dynamic_instructions(
@@ -293,34 +435,27 @@ with col_out:
                         client, doctor_input, cchi_index_text, dynamic_sys_instruction
                     )
                     
-                    # ==========================================
-                    # DETERMINISTIC PYTHON SEPARATION (NO UI BREAKS)
-                    # ==========================================
-                    # Robust Dual-Pattern Token Matcher (Handles tagged or untagged output)
+                    # Robust Dual-Pattern Token Matcher
                     nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
                     if nphies_match:
                         block_content = nphies_match.group(1).strip()
                         clean_markdown = re.sub(r"<NPHIES_BLOCK>.*?</NPHIES_BLOCK>", "", raw_result, flags=re.DOTALL).strip()
                     else:
-                        # Fallback matcher if the model drops the XML tags
                         fallback_match = re.search(r"(\[EPISODE_ID\].*?\[ANTI-UNBUNDLING_LOCK\].*?$)", raw_result, re.DOTALL)
                         if fallback_match:
                             block_content = fallback_match.group(1).strip()
                             clean_markdown = raw_result[:fallback_match.start()].strip()
-                            # Clean up leftover trailing headers or emojis before the block
                             clean_markdown = re.sub(r"(?:🔄\s*)?(?:NPHIES Case Continuity Token.*?$|NPHIES CASE CONTINUITY BLOCK.*?$)", "", clean_markdown, flags=re.MULTILINE).strip()
                         else:
                             block_content = None
                             clean_markdown = raw_result.strip()
                     
-                    # Display the clean clinical audit and notes
                     st.markdown(clean_markdown)
                     
-                    # Display the Continuity Block inside a dedicated, isolated code box
                     if block_content:
-                        st.markdown("---")
-                        st.markdown("##### 🔄 NPHIES Case Continuity Token (Copy for next visit):")
+                        st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+                        st.caption("NPHIES Episode Continuity Token (Persist across multi-visit encounters):")
                         st.code(block_content, language="text")
                     
                 except Exception as e:
-                    st.error(f"Execution error: {str(e)}")
+                    st.error(f"Audit engine execution failed: {str(e)}")
