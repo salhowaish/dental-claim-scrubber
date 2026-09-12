@@ -198,12 +198,6 @@ with st.sidebar:
     * **IBM AI** | Professional Certificate in Artificial Intelligence
     """)
 
-    st.markdown('<div class="sub-section-title">Clearinghouse & Grounding Integrity</div>', unsafe_allow_html=True)
-    if cchi_index_text:
-        st.success("CCHI SBS v3.0 Ground Truth: Active (19 Pages)")
-    else:
-        st.warning("Index PDF missing. Relying on verified internal nomenclature.")
-
     api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.text_input("Gemini API Key", type="password")
     if not api_key:
         st.caption("Store `GEMINI_API_KEY` in Streamlit Secrets for unauthenticated sessions.")
