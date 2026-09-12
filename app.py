@@ -115,6 +115,7 @@ The CCHI Index explicitly enforces "omit code" instructions for inherent steps:
   * Complete bimaxillary dentures MUST use combination code 97719-00-00 [Block 474].
   * Multi-surface restorations on one tooth MUST be billed as a single composite/amalgam code.
   * Surgical extraction (97324-01-00) bundles flap, bone removal (ostectomy), sectioning, and suturing.
+- Examination Bundling: Do NOT co-bill routine periodic oral examinations (97012-00-00) alongside active major restorative, endodontic, or prosthodontic procedures for the same encounter unless the patient presented with a distinct, unrelated acute complaint. Routine checks during impressions or try-in visits are bundled into the global service.
 
 ================================================================================
 UNIVERSAL PRINCIPLE 3: INHERENT COMPONENTS (STRICTLY NON-BILLABLE)
