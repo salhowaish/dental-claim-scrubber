@@ -220,13 +220,11 @@ CLINICIAN ENCOUNTER CASE SUMMARY:
                 )
                 return response.text
             except Exception as e:
-                last_error = e
-                err_text = str(e)
-                if "503" in err_text or "429" in err_text:
-                    time.sleep(2)
-                    continue
-                else:
-                    break
+    err_str = str(e)
+    if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+        st.error("⏳ **Daily Google API Quota Reached (Error 429).** Please wait a few moments, switch your API key, or enable billing on Google AI Studio for unlimited hospital usage.")
+    else:
+        st.error(f"Service temporarily busy: {err_str}")
     raise last_error
 
 # ==========================================
