@@ -296,18 +296,30 @@ with col_out:
                     # ==========================================
                     # DETERMINISTIC PYTHON SEPARATION (NO UI BREAKS)
                     # ==========================================
-                    # Extract the NPHIES Continuity Block from custom tags
+                    # Robust Dual-Pattern Token Matcher (Handles tagged or untagged output)
                     nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
-                    clean_markdown = re.sub(r"<NPHIES_BLOCK>.*?</NPHIES_BLOCK>", "", raw_result, flags=re.DOTALL).strip()
+                    if nphies_match:
+                        block_content = nphies_match.group(1).strip()
+                        clean_markdown = re.sub(r"<NPHIES_BLOCK>.*?</NPHIES_BLOCK>", "", raw_result, flags=re.DOTALL).strip()
+                    else:
+                        # Fallback matcher if the model drops the XML tags
+                        fallback_match = re.search(r"(\[EPISODE_ID\].*?\[ANTI-UNBUNDLING_LOCK\].*?$)", raw_result, re.DOTALL)
+                        if fallback_match:
+                            block_content = fallback_match.group(1).strip()
+                            clean_markdown = raw_result[:fallback_match.start()].strip()
+                            # Clean up leftover trailing headers or emojis before the block
+                            clean_markdown = re.sub(r"(?:🔄\s*)?(?:NPHIES Case Continuity Token.*?$|NPHIES CASE CONTINUITY BLOCK.*?$)", "", clean_markdown, flags=re.MULTILINE).strip()
+                        else:
+                            block_content = None
+                            clean_markdown = raw_result.strip()
                     
                     # Display the clean clinical audit and notes
                     st.markdown(clean_markdown)
                     
                     # Display the Continuity Block inside a dedicated, isolated code box
-                    if nphies_match:
+                    if block_content:
                         st.markdown("---")
                         st.markdown("##### 🔄 NPHIES Case Continuity Token (Copy for next visit):")
-                        block_content = nphies_match.group(1).strip()
                         st.code(block_content, language="text")
                     
                 except Exception as e:
