@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" shape-rendering="geometricPrecision">
+  <defs>
+    <!-- Background subtle dark elevation -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+
+    <!-- Medical/Fintech Grade Cyan-to-Emerald gradient -->
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+
+    <!-- Subtle inner core accent -->
+    <linearGradient id="coreGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+
+  <!-- 1. Dark-Mode Canvas Base (Continuous squircle) -->
+  <rect width="64" height="64" rx="14" fill="url(#bgGrad)" />
+  <rect width="64" height="64" rx="14" fill="none" stroke="#334155" stroke-width="1.5" stroke-opacity="0.6" />
+
+  <!-- 2. The Shield / Dental Ferrule Geometry -->
+  <!-- Encapsulates the tooth anatomy within a defensive 360-degree border -->
+  <path d="M 32 12
+           C 38 12, 47 14, 49 17
+           C 50 25, 50 36, 47 43
+           C 44 49, 37 53, 32 55
+           C 27 53, 20 49, 17 43
+           C 14 36, 14 25, 15 17
+           C 17 14, 26 12, 32 12 Z"
+        fill="url(#coreGrad)"
+        stroke="url(#shieldGrad)"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round" />
+
+  <!-- 3. The Reinforcing Ferrule Band (Collar) -->
+  <!-- Represents structural reinforcement and NPHIES/CCHI compliance lock -->
+  <path d="M 19.5 32
+           C 23.5 34, 40.5 34, 44.5 32"
+        fill="none"
+        stroke="#38BDF8"
+        stroke-width="3"
+        stroke-linecap="round" />
+
+  <!-- 4. Clinical Verification / Crown Cusps Peak -->
+  <!-- Minimalist central ridge that reads as both anatomical cusp prep and audit tick -->
+  <path d="M 26 23
+           L 30 27
+           L 38 19"
+        fill="none"
+        stroke="#FFFFFF"
+        stroke-width="2.75"
+        stroke-linecap="round"
+        stroke-linejoin="round" />
+</svg>
