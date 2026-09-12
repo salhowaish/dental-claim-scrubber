@@ -110,7 +110,7 @@ UNIVERSAL PRINCIPLE 6: MULTI-VISIT CONTINUITY & EPISODE BUNDLING LOCK
      * The full Article 11 tariff is billed (e.g., 850.00 SAR for RPD, 1,250.00 SAR for Zirconia crown).
 
 2. MANDATORY CASE CONTINUITY BLOCK GENERATION:
-   At the very end of EVERY generated output, append this exact, copy-pasteable metadata block:
+   At the very end of EVERY generated output, append this exact metadata block:
 
    ================================================================================
    🔄 NPHIES CASE CONTINUITY BLOCK (Copy & paste into next visit prompt)
@@ -195,8 +195,8 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
     return "".join(instructions)
 
 def generate_scrubbed_package(client, doctor_input, cchi_text, system_instruction):
-    """Executes call using Gemini Flash with dynamic configuration."""
-    models = ["gemini-3.7-flash", "gemini-3.6-flash"]
+    """Executes call using high-quota production Flash models (1,500 free queries/day)."""
+    models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     last_error = None
 
     prompt_payload = f"""
@@ -220,11 +220,13 @@ CLINICIAN ENCOUNTER CASE SUMMARY:
                 )
                 return response.text
             except Exception as e:
-    err_str = str(e)
-    if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-        st.error("⏳ **Daily Google API Quota Reached (Error 429).** Please wait a few moments, switch your API key, or enable billing on Google AI Studio for unlimited hospital usage.")
-    else:
-        st.error(f"Service temporarily busy: {err_str}")
+                last_error = e
+                err_text = str(e)
+                if "503" in err_text or "429" in err_text:
+                    time.sleep(2)
+                    continue
+                else:
+                    break
     raise last_error
 
 # ==========================================
@@ -303,4 +305,8 @@ with col_out:
                     )
                     st.markdown(result_text)
                 except Exception as e:
-                    st.error(f"Service temporarily busy: {str(e)}")
+                    err_str = str(e)
+                    if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                        st.error("⏳ **Rate limit encountered.** Please wait a few seconds and try again.")
+                    else:
+                        st.error(f"Service temporarily busy: {err_str}")
