@@ -63,7 +63,7 @@ with col_out:
                 try:
                     client = genai.Client(api_key=api_key)
                     response = client.models.generate_content(
-                        model="gemini-1.5-flash",
+                        model="gemini-3.7-flash",
                         contents=doctor_input,
                         config=types.GenerateContentConfig(
                             system_instruction=SYSTEM_INSTRUCTIONS,
