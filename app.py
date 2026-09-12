@@ -57,7 +57,7 @@ def generate_with_resilience(client, prompt):
     1. Tries primary model (gemini-3.7-flash) with silent retry.
     2. Instantly falls back to high-capacity workhorse (gemini-2.0-flash) if 503 persists.
     """
-    models = ["gemini-3.7-flash", "gemini-2.0-flash"]
+    models = ["gemini-3.7-flash", "gemini-3.6-flash"]
     last_error = None
 
     for model_name in models:
