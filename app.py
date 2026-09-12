@@ -41,8 +41,8 @@ Enforce Australian Coding Standards (ACS 0042), ACHI 10th Edition, SBS v3.0, and
 """
 
 def generate_with_resilience(client, prompt):
-    """Retries automatically on 503 demand spikes and falls back to flash backup."""
-    models = ["gemini-2.5-flash", "gemini-1.5-flash"]
+    """Retries automatically on 503 demand spikes."""
+    models = ["gemini-3.7-flash"]
     last_error = None
 
     for model_name in models:
@@ -60,12 +60,12 @@ def generate_with_resilience(client, prompt):
             except Exception as e:
                 last_error = e
                 err_text = str(e)
-                # If server spikes with 503 (high demand) or 429, wait briefly and retry
+                # If server spikes with 503 (high demand) or 429, wait and retry
                 if "503" in err_text or "429" in err_text:
                     time.sleep(1.5 * (attempt + 1))
                     continue
                 else:
-                    break  # Break to next model on non-transient error
+                    break
     raise last_error
 
 col_in, col_out = st.columns([1, 1], gap="large")
