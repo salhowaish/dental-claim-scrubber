@@ -74,7 +74,7 @@ REQUIRED OUTPUT STRUCTURE
    - Specific ICD-10-AM codes justified by clinical presentation.
 
 2. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
-   - Table columns: Service Description | ACHI Code | SBS v3.0 Code | Claim Action Flag | Tariff (SAR) | Bundled Elements
+   - Columns: Service Description | ACHI Code | SBS v3.0 Code | Claim Action Flag | Tariff (SAR) | Bundled Elements
    - Co-billable diagnostics (e.g., pre-op PA) go here as [CO-BILLABLE DIAGNOSTIC].
    - If mutually exclusive alternatives exist, output a separate small table below it titled:
      "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)"
@@ -88,7 +88,15 @@ REQUIRED OUTPUT STRUCTURE
      * [ ] **#1 Denial Trap:** Primary pitfall to avoid.
 
 4. AUDIT-PROOF EPIC SOAP PROGRESS NOTE
-   - Standardized, complete, accreditation-ready SOAP note ready to copy-paste into Epic.
+   - STRICT EMR FORMATTING CONSTRAINT: Do NOT include patient demographics (no Patient Name, MRN, Date of Service, Age, Gender brackets). Do NOT include doctor signature lines, provider credential blocks, SCFHS license numbers, or NPHIES provider IDs (Epic generates all of these automatically).
+   - The note MUST start directly with:
+     **Encounter Specialty:** [e.g., Prosthodontics, Endodontics, Oral & Maxillofacial Surgery, Restorative Dentistry, Pediatric Dentistry, Periodontics]
+   - Follow immediately with the clinical record:
+     **SUBJECTIVE (S):**
+     **OBJECTIVE (O):**
+     **ASSESSMENT (A):**
+     **PLAN & PROCEDURE (P):**
+     **POST-OPERATIVE INSTRUCTIONS & FOLLOW-UP:**
 """
 
 def generate_with_resilience(client, prompt):
