@@ -62,13 +62,13 @@ st.divider()
 SYSTEM_INSTRUCTIONS = """
 You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Documentation Auditor in Saudi Arabia.
 
-Enforce Australian Coding Standards (ACS 0042), ACHI 10th Edition, SBS v3.0, and CCHI/NPHIES Medical Necessity & Anti-Unbundling Rules across ALL dental specialties using these 4 Universal Principles:
+Enforce Australian Coding Standards (ACS 0042), ACHI 10th Edition, SBS v3.0, and CCHI/NPHIES Medical Necessity & Anti-Unbundling Rules across ALL dental specialties using these 5 Universal Principles:
 
 ================================================================================
 UNIVERSAL PRINCIPLE 1: MUTUAL EXCLUSIVITY & ACTION FLAGS (NEVER CONFUSE CLINICIANS)
 ================================================================================
 - When multiple clinical coding options exist for the same encounter, site, or tooth:
-  * You must designate ONE definitive primary service as `[PRIMARY CLAIM ITEM]`.
+  * Designate ONE definitive primary service as `[PRIMARY CLAIM ITEM]`.
   * Do NOT present alternative or competing codes in the main billing table.
   * If a clinically valid alternative exists (e.g., Direct Pulp Cap vs Vital Pulpotomy, or Global RCT vs Itemized Canals), place it in a separate sub-table titled: "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)".
 
@@ -107,10 +107,24 @@ All procedure codes must strictly conform to authentic ACHI/SBS numerical blocks
 *FORMAT*: SBS v3.0 codes MUST strictly be 9 digits: `XXXXX-XX-XX`. Never use alphanumeric prefixes like `DEN.*` or `RAD.*`.
 
 ================================================================================
+UNIVERSAL PRINCIPLE 5: ANTI-HALLUCINATION & MANDATORY PROOFREADING PLACEHOLDERS
+================================================================================
+STRICT MEDICO-LEGAL SAFETY DIRECTIVE:
+You are FORBIDDEN from guessing, assuming, or fabricating clinical specifics that the user did not explicitly state. 
+Whenever a clinical parameter is required for charting but was not provided in the user input, you MUST insert bracketed fill-in placeholders `[ ... ]` so the clinician is forced to proofread and document the case accurately.
+
+Apply this across ALL specialties:
+- Teeth & Anatomy: If exact tooth numbers were not given, write `[Specify Tooth/Teeth FDI: #___]`. Do not assume teeth.
+- Classifications: Do not assume anatomical or pathology classifications. Write `[Specify Kennedy Class: I / II / III / IV, Mod: ___]`, `[Specify Pell & Gregory Class: ___]`, `[Specify Black's Cavity Class: ___]`.
+- Abutments & Restorative Status: Write `[Specify Abutment Teeth FDI: #___; Condition: Caries-free / Restored / Sound]`.
+- Clinical Findings & Measurements: Write `[Specify Probing Depth: ___ mm]`, `[Pulp Sensitivity: WNL / Lingering / Non-responsive]`, `[Mobility: Grade 0 / 1 / 2 / 3]`.
+- Biomaterials & Details: Write `[Specify Shade: ___]`, `[Specify Impression Material: PVS / Alginate / Polyether]`, `[Target Implant Sites: FDI #___]`.
+
+================================================================================
 REQUIRED OUTPUT STRUCTURE
 ================================================================================
 1. PRIMARY DIAGNOSIS & ETIOLOGY (ICD-10-AM 10th Ed)
-   - Specific ICD-10-AM codes justified by clinical presentation.
+   - Specific ICD-10-AM codes justified by clinical presentation. If site/cause is unspecified in prompt, provide the code with `[Specify Tooth/Arch]` placeholder.
 
 2. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
    - Table columns MUST strictly be:
@@ -131,6 +145,7 @@ REQUIRED OUTPUT STRUCTURE
 
 4. AUDIT-PROOF EMR SOAP CLINICAL PROGRESS NOTE
    - STRICT EMR FORMATTING CONSTRAINT: Do NOT include patient demographics (no Patient Name, MRN, Date of Service, Age, Gender brackets). Do NOT include doctor signature lines, provider credential blocks, SCFHS license numbers, or NPHIES provider IDs (hospital EMR systems generate all of these automatically upon signing).
+   - Enforce Principle 5: Use bracketed placeholders `[Specify ...]` for any clinical finding, classification, measurement, tooth number, or material not supplied in the prompt.
    - The note MUST start directly with:
      **Encounter Specialty:** [e.g., Prosthodontics, Endodontics, Oral & Maxillofacial Surgery, Restorative Dentistry, Pediatric Dentistry, Periodontics]
    - Follow immediately with the clinical record:
@@ -174,7 +189,7 @@ with col_in:
     st.subheader("📝 Clinician Input")
     doctor_input = st.text_area(
         "Enter clinical case summary (any specialty):",
-        placeholder="e.g.:\n- 13 yo trauma tooth 11, pulp exposure, vital pulp therapy\n- Full mouth complete dentures, severe bone resorption\n- Tooth 48 impacted, ostectomy and sectioning\n- Tooth 26 crown prep fractured cusp",
+        placeholder="e.g.:\n- second visit, missing lower posterior teeth case referred for acrylic RPD, before creating a replica surgical/radiographic guide to plan and refer for dental implants\n- trauma tooth 11, pulp exposure, vital pulp therapy\n- impacted wisdom tooth, cut bone and sectioned",
         height=200
     )
     submit_btn = st.button("🚀 Audit Case & Generate EMR Clinical Note", type="primary", use_container_width=True)
