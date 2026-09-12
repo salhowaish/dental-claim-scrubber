@@ -6,19 +6,58 @@ from google.genai import types
 st.set_page_config(
     page_title="Saudi Dental Claim Scrubber",
     page_icon="🦷",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Header
+# ==========================================
+# CLINICAL ARCHITECT & DEVELOPER PROFILE
+# ==========================================
+with st.sidebar:
+    st.markdown("### 👨‍⚕️ Developed & Architected By")
+    st.markdown("## **Dr. Sulaiman Alhowaish**")
+    st.markdown("*Specialist Prosthodontist • Healthcare Revenue Cycle & Medical AI Specialist*")
+    st.markdown("---")
+    
+    st.markdown("#### 🎓 Board & Academic Credentials")
+    st.markdown("""
+    * **Saudi Board in Prosthodontics (SB-Pros)**  
+      *Specialist in Fixed, Removable & Implant Prosthodontics*
+    * **Executive Master's Degree in Insurance**  
+      *King Saud University (KSU)*
+    * **Bachelor of Dental Surgery (BDS)**
+    """)
+    
+    st.markdown("#### 📜 Professional Certifications")
+    st.markdown("""
+    * **Certified Professional Coder (CPC®)**  
+      *American Academy of Professional Coders (AAPC)*
+    * **IBM Professional Certificate in Artificial Intelligence**  
+      *Applied AI & Machine Learning in Healthcare & Medicine*
+    """)
+    
+    st.markdown("---")
+    st.markdown("#### 💡 Clinical & Technical Vision")
+    st.caption(
+        "Bridging advanced prosthodontic care, national CCHI/NPHIES claim integrity, "
+        "and applied artificial intelligence to build zero-error, audit-proof clinical workflows."
+    )
+    st.markdown("---")
+
+    # API Key handling (Hidden if stored in Streamlit Secrets)
+    api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.text_input("Gemini API Key", type="password")
+    if not api_key:
+        st.info("💡 Add `GEMINI_API_KEY` into Streamlit App Secrets to keep this permanently unlocked.")
+
+# ==========================================
+# MAIN APP HEADER
+# ==========================================
 st.title("🦷 Saudi Dental Documentation & Claim Scrubber")
-st.caption("Universal CCHI / NPHIES Bundling Engine • SBS v3.0 & ACHI 10th Ed • Audit-Proof Epic Notes")
+st.markdown(
+    "**Clinical AI Engine by Dr. Sulaiman Alhowaish (SB-Pros, CPC, MSc Insurance, IBM AI)**  \n"
+    "*Universal CCHI / NPHIES Bundling Engine • SBS v3.0 & ACHI 10th Ed • Audit-Proof Epic Notes*"
+)
 st.divider()
-
-# API Key handling
-api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.sidebar.text_input("Gemini API Key", type="password")
-
-if not api_key:
-    st.sidebar.info("💡 Add `GEMINI_API_KEY` into Streamlit App Secrets to keep this permanently unlocked.")
 
 SYSTEM_INSTRUCTIONS = """
 You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Documentation Auditor in Saudi Arabia.
@@ -88,7 +127,7 @@ REQUIRED OUTPUT STRUCTURE
      * [ ] **#1 Denial Trap:** Primary pitfall to avoid.
 
 4. AUDIT-PROOF EPIC SOAP PROGRESS NOTE
-   - STRICT EMR FORMATTING CONSTRAINT: Do NOT include patient demographics (no Patient Name, MRN, Date of Service, Age, Gender brackets). Do NOT include doctor signature lines, provider credential blocks, SCFHS license numbers, or NPHIES provider IDs (Epic generates all of these automatically).
+   - STRICT EMR FORMATTING CONSTRAINT: Do NOT include patient demographics (no Patient Name, MRN, Date of Service, Age, Gender brackets). Do NOT include doctor signature lines, provider credential blocks, SCFHS license numbers, or NPHIES provider IDs.
    - The note MUST start directly with:
      **Encounter Specialty:** [e.g., Prosthodontics, Endodontics, Oral & Maxillofacial Surgery, Restorative Dentistry, Pediatric Dentistry, Periodontics]
    - Follow immediately with the clinical record:
