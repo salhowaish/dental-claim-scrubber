@@ -1,4 +1,5 @@
 import os
+import re
 import streamlit as st
 import time
 from pypdf import PdfReader
@@ -17,7 +18,6 @@ st.set_page_config(
 # ==========================================
 @st.cache_data(show_spinner=False)
 def load_cchi_dental_index():
-    """Extracts and caches text from the official 19-page CCHI SBS v3 PDF."""
     pdf_filename = "sbs_dental_index.pdf"
     if not os.path.exists(pdf_filename):
         return ""
@@ -78,103 +78,103 @@ with st.sidebar:
 st.title("🦷 Saudi Dental Documentation & Claim Scrubber")
 st.markdown(
     "**Clinical AI Engine by Dr. Sulaiman Alhowaish (SB-Pros, CPC, MSc Insurance, IBM AI)**  \n"
-    "*Grounded in Official CCHI SBS v3.0 Dental Index • ACHI 10th Ed • Multi-Visit Episode Protection*"
+    "*Hospital-Grade Engine • Grounded in CCHI SBS v3.0 • ACHI 10th Ed • ICD-10-AM Diagnostic Locking*"
 )
 st.divider()
 
 # ==========================================
-# PROMPT LOGIC & DYNAMIC STRUCTURE BUILDER
+# HARDENED GROUND-TRUTH SYSTEM INSTRUCTIONS
 # ==========================================
 BASE_PRINCIPLES = """
 You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Documentation Auditor in Saudi Arabia.
 You are provided with the full text of the official Council of Health Insurance (CCHI) Saudi Billing System (SBS) Version 3 Dental Alphabetic Index.
 You MUST search this index to identify the exact 9-digit SBS code, the 7-digit ACHI code, and the [Block] number for any dental intervention.
 
-Enforce the following 6 Universal Principles:
-1. GROUNDING & ACTION FLAGS: Look up procedures using CCHI Lead Terms. Assign: [PRIMARY CLAIM ITEM], [CO-BILLABLE PROCEDURE], [CO-BILLABLE DIAGNOSTIC], [IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE], or [PRIOR-AUTH / PLANNED FUTURE SERVICE]. Place competing alternatives for the same site in "⚠️ Mutually Exclusive Alternatives".
-2. ZERO UNBUNDLING: Obey CCHI "omit code" instructions (e.g., temporary crowns/bridges, dressings/irrigations, sutures for hemorrhage, new denture adjustments are all bundled). Bimaxillary dentures must use omnibus 97719-00-00 [474]. Multi-surface restorations use single combination codes.
-3. INHERENT COMPONENTS: Local anesthesia (Block 1909), isolation, cavity bases/liners, impression trays/materials, bite registrations, and try-ins are strictly non-billable.
-4. DIGIT VALIDATION: ACHI Code = strictly 7 digits (XXXXX-XX). SBS Code = strictly 9 digits (XXXXX-XX-XX). Always include the [Block].
-5. MANDATORY BLANK PLACEHOLDERS: NEVER guess or pre-fill tooth numbers, measurements, or materials not stated by the user. Use strictly blank placeholders: `[Specify FDI Tooth: #___]`, `[Specify Probing Depth: ___ mm]`, `[Specify Material: ___]`.
+================================================================================
+CRITICAL RULE: ICD-10-AM 10TH EDITION SPECIFICITY & DIAGNOSTIC LOCK
+================================================================================
+1. USE ONLY AUSTRALIAN 10TH EDITION CODES (NEVER USE RETIRED CODES):
+   - Edentulism / Loss of teeth: Use K08.41 (Complete edentulism, both jaws), K08.42 (Complete edentulism, single jaw), K08.43 (Partial edentulism, multiple missing), K08.44 (Partial edentulism, single missing). NEVER USE K08.1 (RETIRED).
+   - Caries: K02.51, K02.52, K02.53 (Arrested/enamel/dentin with pulp involvement), K02.61, K02.62, K02.63 (Smooth surface), K02.71, K02.72 (Root caries).
+   - Pulpal / Periapical: K04.01 (Reversible pulpitis), K04.02 (Irreversible pulpitis), K04.1 (Necrosis of pulp), K04.5 (Chronic apical periodontitis), K04.7 (Periapical abscess without sinus).
+   - Periodontal: K05.10 (Chronic gingivitis), K05.31 (Chronic periodontitis, localized), K05.32 (Chronic periodontitis, generalized).
+   - Surgical / Impacted: K01.1 (Impacted teeth), K01.0 (Embedded teeth).
+   - Trauma: S02.51 (Fracture of tooth enamel only), S02.52 (Fracture of crown without pulp), S02.53 (Fracture of crown with pulp), S03.2X1 (Luxation of tooth).
+
+2. DIAGNOSTIC IMMUTABILITY RULE (ANTI-DRIFT):
+   - If clinician input contains an existing "[PRIMARY_ICD10]" in a CONTINUITY BLOCK, YOU MUST LOCK THAT EXACT CODE.
+   - DO NOT alter, generalize, or shift the ICD-10-AM code across follow-up encounters of the same episode.
 
 ================================================================================
-UNIVERSAL PRINCIPLE 6: MULTI-VISIT CONTINUITY & EPISODE BUNDLING LOCK
+UNIVERSAL MULTI-VISIT CONTINUITY & ANTI-UNBUNDLING RULES
 ================================================================================
-1. EPISODE STAGING ADJUDICATION:
-   - If the clinician's input contains an existing "NPHIES CASE CONTINUITY BLOCK", or if the case is identified as an intermediate stage of a global service (e.g., RPD Visit 1-3, Crown Prep Visit 1, or RCT Step 1):
-     * Intermediate Visits: The primary procedure Claim Action Flag MUST be set to `[IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE]`.
-     * The Tariff MUST be output as `0.00 SAR` (Claim locked until final delivery/cementation/obturation per CCHI global pricing rules).
-     * Strictly warn against unbundling routine exams (97012-00-00), impressions, or jaw relations on intermediate visits.
-   - Final Delivery Visits (e.g., RPD Insertion Visit 4, Crown Cementation Visit 2, or RCT Final Obturation):
-     * The procedure unlocks as `[PRIMARY CLAIM ITEM - GLOBAL DEFINITIVE]`.
-     * The full Article 11 tariff is billed (e.g., 850.00 SAR for RPD, 1,250.00 SAR for Zirconia crown).
+1. INTERMEDIATE VISITS (Global Bundling):
+   - RPD/CD Visits 1-4, Indirect Crown/Bridge Visit 1, Multi-visit RCT Stage 1:
+     * Primary Procedure Claim Action Flag MUST BE: `[IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE]`.
+     * Tariff MUST BE: `0.00 SAR`.
+     * Explicitly bundle impressions, bite registrations, wax try-ins, dressing changes, and interim exams.
+2. DEFINITIVE DELIVERY VISITS:
+   - Unlock global code as `[PRIMARY CLAIM ITEM - GLOBAL DEFINITIVE]` with full Article 11 tariff.
+3. CO-BILLABLE PREPARATORY EXCEPTIONS (NEVER OMIT ON VISIT 1):
+   - Core build-up (97627-00-00 [463]), Post/core (97625-00-00 [463]), and Old crown removal (97655-00-00 [462]) ARE NOT BUNDLED into crown prep. Bill them on Visit 1 with their independent tariff.
 
-2. MANDATORY CASE CONTINUITY BLOCK FORMATTING:
-   At the very end of EVERY generated output, append a copy-pasteable metadata block.
-   CRITICAL FORMATTING RULE: 
-   - You MUST enclose the entire block inside a Markdown text code block (using triple backticks: ```text ... ```).
-   - NEVER output raw `===` divider lines outside of a code fence, as Markdown interprets them as giant H1 heading underlines.
-   
-   Structure inside the code block exactly as follows:
-   ```text
-   ================================================================================
-   NPHIES CASE CONTINUITY BLOCK (Copy & paste into next visit prompt)
-   ================================================================================
-   [EPISODE_ID]: [Specialty]-[Procedure]-[FDI Site]
-   [PRIMARY_SBS_CODE]: [SBS 9-digit Code] [Block]
-   [CURRENT_STAGE]: Visit [X] of [Total Estimated Visits] — [Description of Today's Step]
-   [BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
-   [NEXT_VISIT_EXPECTED]: Visit [X+1] — [Description of Next Clinical Step]
-   [ANTI-UNBUNDLING_LOCK]: LOCKED — Inherent intermediate steps must NOT be billed separately.
-   ================================================================================
-   ```
+================================================================================
+CRITICAL FORMATTING MANDATE FOR CASE CONTINUITY BLOCK
+================================================================================
+You MUST output the continuity block enclosed STRICTLY within `<NPHIES_BLOCK>` and `</NPHIES_BLOCK>` tags at the very end of your response.
+DO NOT use markdown headers, equal signs, or formatting inside or around these tags.
+
+Format inside the tags strictly as:
+<NPHIES_BLOCK>
+[EPISODE_ID]: [Specialty]-[Procedure]-[FDI Tooth/Arch]
+[PRIMARY_ICD10]: [Code] — [Accurate 10th Ed Description]
+[PRIMARY_SBS_CODE]: [SBS 9-digit Code] [Block]
+[CURRENT_STAGE]: Visit [X] of [Total Visits] — [Description of Today's Step]
+[BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
+[NEXT_VISIT_EXPECTED]: Visit [X+1] — [Description of Next Clinical Step]
+[ANTI-UNBUNDLING_LOCK]: LOCKED — Inherent intermediate steps must NOT be billed separately.
+</NPHIES_BLOCK>
 """
 
 def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway):
     instructions = [BASE_PRINCIPLES]
     
     if is_staged and staged_pathway != "Auto-detect from case input":
-        instructions.append(f"\nACTIVE WORKFLOW PRE-SET: Clinician selected multi-visit pathway: {staged_pathway}. Accurately align the episode stages and billing locks with this pathway.\n")
+        instructions.append(f"\nACTIVE WORKFLOW PRE-SET: Clinician selected pathway: {staged_pathway}. Align stage numbering and tariff locks strictly with this clinical pathway.\n")
         
-    instructions.append("\nREQUIRED OUTPUT SECTIONS (Generate ONLY the sections explicitly listed below):\n")
+    instructions.append("\nREQUIRED OUTPUT SECTIONS (Generate ONLY the sections explicitly requested below):\n")
     sec_num = 1
     
     if inc_icd:
         instructions.append(f"""
 {sec_num}. PRIMARY DIAGNOSIS & ETIOLOGY (ICD-10-AM 10th Ed)
-   - Specific ICD-10-AM code justified by clinical presentation. If site/cause is unspecified, provide code with `[Specify Tooth/Arch]` placeholder.
+   - Specific, modern ICD-10-AM code. If site/cause is unspecified, provide code with `[Specify Tooth/Arch]` placeholder.
 """)
         sec_num += 1
 
     if inc_billing:
         instructions.append(f"""
 {sec_num}. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
-   - Table columns MUST strictly be:
+   - Columns MUST strictly be:
      `Service Description` | `ACHI Code` | `SBS v3.0 Code` | `Block` | `Claim Action Flag` | `Govt Tariff (SAR)* [Art. 11]` | `Bundled Elements (NON-BILLABLE)`
-   - Tariff Column: Output realistic numeric statutory rates benchmarked to Article 11 (e.g., 0.00 for locked in-progress visits; 850.00 for definitive RPD delivery).
-   - Immediately below the table, include: `*Tariff prices are determined in accordance with Article 11: "Dental services pricing in government sector".`
-   - If mutually exclusive alternatives exist, output a sub-table: "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)".
+   - Tariff: 0.00 for intermediate locked visits; realistic statutory Article 11 tariff for definitive delivery.
+   - Immediately below table: `*Tariff prices are determined in accordance with Article 11: "Dental services pricing in government sector".`
+   - Sub-table: "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)" if alternatives exist.
 """)
         sec_num += 1
 
     if inc_checklist:
         instructions.append(f"""
 {sec_num}. CLINICIAN'S RAPID PRE-FLIGHT CHECKLIST (CCHI / NPHIES)
-   - Concise single-line checkmarks:
-     * [ ] **Anatomical Site:** Tooth / Arch identifier.
-     * [ ] **Required Radiograph:** Mandatory imaging attachments.
-     * [ ] **Clinical Justification:** Clear objective criteria.
-     * [ ] **Prior Authorization / Episode Status:** Status under NPHIES rules.
-     * [ ] **#1 Denial Trap:** Primary pitfall to avoid.
+   - Single-line checks: Anatomical Site, Required Radiograph, Clinical Justification, Prior Authorization/Episode Status, #1 Denial Trap.
 """)
         sec_num += 1
 
     if note_style == "⚡ Concise SmartForm Macro (Hospital Template)":
         instructions.append(f"""
 {sec_num}. AUDIT-PROOF EMR CLINICAL NOTE (CONCISE SMARTFORM MACRO)
-   - STRICT FORMAT RULE: Do NOT generate multi-paragraph SOAP essays. Output a rapid, modular EMR Macro matching native hospital SmartForms.
-   - NO patient demographics or doctor signature blocks.
-   - Structure strictly as follows:
+   - DO NOT write multi-paragraph narratives. Output rapid, modular SmartForm lines.
+   - Structure:
      **Encounter Specialty:** [Specialty Name]
      **Procedure:** [Definitive Procedure Name]
      **Tooth / Site:** [Tooth FDI #___ / Arch / Quadrant]
@@ -182,26 +182,18 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
      **Radiographs:** [None / Pre-op PA / Post-op PA: Specify Finding]
      **Patient Status:** [Cooperative / Mild Sensitivity / Asymptomatic]
      **Clinical Procedure:** [Short factual lines detailing steps performed today].
-     **Materials / Delivery:** [Use discrete multi-choice pickers: e.g., [PVS / Polyether / Alginate] or [RelyX / Resin / GI]].
+     **Materials / Delivery:** [Multi-choice pickers: e.g., [PVS / Polyether] or [RelyX / Resin / GI]].
      **Post-Op & Follow-Up:** [Concise 1-line home care instruction and recall timeframe].
 """)
     elif note_style == "📋 Elaborate SOAP Note (Academic / Hospital Narrative)":
         instructions.append(f"""
 {sec_num}. AUDIT-PROOF EMR SOAP CLINICAL PROGRESS NOTE (NARRATIVE)
-   - Comprehensive narrative medical record. NO patient demographics or signature blocks.
-   - Structure:
-     **Encounter Specialty:** [Specialty Name]
-     **SUBJECTIVE (S):** Detailed chief complaint, HPI, and medical history.
-     **OBJECTIVE (O):** Detailed extraoral, intraoral, periodontal charting, and radiographic findings.
-     **ASSESSMENT (A):** Definitive diagnoses linked to ICD-10-AM and clinical rationale.
-     **PLAN & PROCEDURE (P):** Detailed itemized execution steps, isolation, materials, and staged plan.
-     **POST-OPERATIVE INSTRUCTIONS & FOLLOW-UP:** Home care protocols, pain management, and recall interval.
+   - Comprehensive narrative medical record: Subjective, Objective, Assessment, Plan & Procedure, Post-Operative Instructions.
 """)
 
     return "".join(instructions)
 
 def generate_scrubbed_package(client, doctor_input, cchi_text, system_instruction):
-    """Executes call using Gemini 3.7 Flash with retry resilience."""
     prompt_payload = f"""
 OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX REFERENCE (ATTACHED GROUND TRUTH):
 {cchi_text if cchi_text else "[Built-in ACHI/SBS Knowledge Active]"}
@@ -216,7 +208,7 @@ CLINICIAN ENCOUNTER CASE SUMMARY:
                 contents=prompt_payload,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
-                    temperature=0.1,
+                    temperature=0.05,
                 )
             )
             return response.text
@@ -234,12 +226,12 @@ col_in, col_out = st.columns([1, 1], gap="large")
 with col_in:
     st.subheader("📝 Clinician Input")
     doctor_input = st.text_area(
-        "Enter clinical case summary (paste previous Continuity Block here for follow-up visits):",
-        placeholder="e.g.:\n- crown prep and temp tooth 26\n- second visit, missing lower posterior teeth case referred for acrylic RPD\n- or paste the [NPHIES CASE CONTINUITY BLOCK] from the previous appointment along with today's notes",
+        "Enter clinical encounter details (paste previous Continuity Block here for follow-up visits):",
+        placeholder="e.g.:\n- second visit, missing lower posterior teeth case referred for acrylic RPD\n- crown prep and temp tooth 46\n- or paste the Continuity Block from the previous visit along with today's note",
         height=170
     )
     
-    st.markdown("##### ⚙️ Output Package Customization")
+    st.markdown("##### ⚙️ Output Customization")
     c1, c2, c3 = st.columns(3)
     with c1:
         inc_icd = st.checkbox("ICD-10-AM Diagnosis", value=True)
@@ -262,7 +254,7 @@ with col_in:
     is_staged = st.checkbox(
         "🔄 Multi-Visit / Staged Episode Tracker", 
         value=True, 
-        help="Locks intermediate stages to 0.00 SAR to prevent premature unbundled billing, unlocking the global fee only at final delivery."
+        help="Enforces CCHI Episode Billing Rules: Locks intermediate visits to 0.00 SAR and unlocks the full tariff upon final delivery."
     )
     staged_pathway = "Auto-detect from case input"
     if is_staged:
@@ -291,15 +283,32 @@ with col_out:
         elif not (inc_icd or inc_billing or inc_checklist or note_style != "🚫 Skip Clinical Note (Coding Only)"):
             st.warning("Please select at least one output section to generate.")
         else:
-            with st.spinner("Auditing claim against CCHI SBS v3 Index & checking episode continuity..."):
+            with st.spinner("Auditing claim against CCHI SBS v3 Index & validating episode state..."):
                 try:
                     client = genai.Client(api_key=api_key)
                     dynamic_sys_instruction = construct_dynamic_instructions(
                         inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
                     )
-                    result_text = generate_scrubbed_package(
+                    raw_result = generate_scrubbed_package(
                         client, doctor_input, cchi_index_text, dynamic_sys_instruction
                     )
-                    st.markdown(result_text)
+                    
+                    # ==========================================
+                    # DETERMINISTIC PYTHON SEPARATION (NO UI BREAKS)
+                    # ==========================================
+                    # Extract the NPHIES Continuity Block from custom tags
+                    nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
+                    clean_markdown = re.sub(r"<NPHIES_BLOCK>.*?</NPHIES_BLOCK>", "", raw_result, flags=re.DOTALL).strip()
+                    
+                    # Display the clean clinical audit and notes
+                    st.markdown(clean_markdown)
+                    
+                    # Display the Continuity Block inside a dedicated, isolated code box
+                    if nphies_match:
+                        st.markdown("---")
+                        st.markdown("##### 🔄 NPHIES Case Continuity Token (Copy for next visit):")
+                        block_content = nphies_match.group(1).strip()
+                        st.code(block_content, language="text")
+                    
                 except Exception as e:
-                    st.error(f"Service error: {str(e)}")
+                    st.error(f"Execution error: {str(e)}")
