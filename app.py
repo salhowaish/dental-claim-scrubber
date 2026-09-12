@@ -109,19 +109,25 @@ UNIVERSAL PRINCIPLE 6: MULTI-VISIT CONTINUITY & EPISODE BUNDLING LOCK
      * The procedure unlocks as `[PRIMARY CLAIM ITEM - GLOBAL DEFINITIVE]`.
      * The full Article 11 tariff is billed (e.g., 850.00 SAR for RPD, 1,250.00 SAR for Zirconia crown).
 
-2. MANDATORY CASE CONTINUITY BLOCK GENERATION:
-   At the very end of EVERY generated output, append this exact metadata block:
-
+2. MANDATORY CASE CONTINUITY BLOCK FORMATTING:
+   At the very end of EVERY generated output, append a copy-pasteable metadata block.
+   CRITICAL FORMATTING RULE: 
+   - You MUST enclose the entire block inside a Markdown text code block (using triple backticks: ```text ... ```).
+   - NEVER output raw `===` divider lines outside of a code fence, as Markdown interprets them as giant H1 heading underlines.
+   
+   Structure inside the code block exactly as follows:
+   ```text
    ================================================================================
-   🔄 NPHIES CASE CONTINUITY BLOCK (Copy & paste into next visit prompt)
+   NPHIES CASE CONTINUITY BLOCK (Copy & paste into next visit prompt)
    ================================================================================
    [EPISODE_ID]: [Specialty]-[Procedure]-[FDI Site]
    [PRIMARY_SBS_CODE]: [SBS 9-digit Code] [Block]
-   [CURRENT_STAGE]: Visit [X] of [Total Estimated Visits] — [Description of Today's Completed Step]
+   [CURRENT_STAGE]: Visit [X] of [Total Estimated Visits] — [Description of Today's Step]
    [BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
    [NEXT_VISIT_EXPECTED]: Visit [X+1] — [Description of Next Clinical Step]
    [ANTI-UNBUNDLING_LOCK]: LOCKED — Inherent intermediate steps must NOT be billed separately.
    ================================================================================
+   ```
 """
 
 def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway):
