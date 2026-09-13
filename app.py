@@ -366,7 +366,9 @@ You are grounded in:
   * Removable denture fabrication steps (97719-01-10 through 97719-01-60 and 97719-01-80) are STATUTORY NON-BILLABLE items for documentation only (0.00 SAR, [IN-PROGRESS / BUNDLED ENCOUNTER]).
   * Full denture insertion (97719-01-70 / 97719-00-00) unlocks the global statutory fee (SAR 8,000).
   * Post & Core (97625-xx): Includes core build-up. Never bill separate core build-up (97627-00-10) on the same tooth receiving a post.
-
+- ORTHODONTICS (SBSCS 4080):
+  * Comprehensive orthodontic exam (97011-00-20 [450], SAR 500.00) INHERENTLY INCLUDES: intraoral photos, extraoral photos, OPG, cephalometric radiographs, cephalometric tracings, and study casts/digital models.
+  * STRICT ANTI-UNBUNDLING RULE: Under SBSCS 4080 Rule 1, NONE of these diagnostic records can be assigned a separate billable code or fee when 97011-00-20 is billed. They MUST appear only as bundled non-billable elements (0.00 SAR).
 ================================================================================
 3. ARTICLE 11 STATUTORY GOVERNMENT TARIFF PRICING
 ================================================================================
