@@ -2,6 +2,7 @@ import os
 import re
 import json
 import time
+import pandas as pd
 import streamlit as st
 from pypdf import PdfReader
 from google import genai
@@ -199,11 +200,10 @@ def load_cchi_regulatory_databases():
     if os.path.exists(pdf_filename):
         try:
             reader = PdfReader(pdf_filename)
-            extracted = []
-            for i, page in enumerate(reader.pages):
-                text = page.extract_text()
-                if text:
-                    extracted.append(f"--- PAGE {i+1} ---\n{text}")
+            extracted = [
+                f"--- PAGE {i+1} ---\n{p.extract_text()}" 
+                for i, p in enumerate(reader.pages) if p.extract_text()
+            ]
             pdf_text = "\n".join(extracted)
         except Exception:
             pdf_text = ""
@@ -218,9 +218,53 @@ def load_cchi_regulatory_databases():
         except Exception:
             icd_list = []
 
-    return pdf_text, icd_list
+    # 3. Load & Auto-Sanitize Article 11 Tariffs (CSV)
+    tariff_map = {}
+    csv_filename = "cchi_article11_tariffs.csv"
+    if os.path.exists(csv_filename):
+        try:
+            df = pd.read_csv(csv_filename, skiprows=1, encoding="utf-8", encoding_errors="ignore")
+            df = df.dropna(how="all", axis=1).dropna(how="all", axis=0)
+            df.columns = df.columns.str.strip()
+            
+            for col in df.columns:
+                if df[col].dtype == object:
+                    df[col] = df[col].astype(str).str.replace(r'[\r\n]+', '', regex=True).str.strip()
+            
+            for _, row in df.iterrows():
+                hyphen_code = str(row.get("SBS code -Hyphenated", "")).strip()
+                sbs_raw = row.get("SBSCode")
+                sbs_num = ""
+                if pd.notna(sbs_raw):
+                    try:
+                        sbs_num = str(int(float(sbs_raw))).zfill(9)
+                    except Exception:
+                        sbs_num = str(sbs_raw).strip()
+                
+                block_val = str(row.get("Block", "")).strip()
+                if block_val.endswith(".0"):
+                    block_val = block_val[:-2]
 
-cchi_index_text, cchi_icd_db = load_cchi_regulatory_databases()
+                entry = {
+                    "sbs_hyphen": hyphen_code,
+                    "sbs_code": sbs_num,
+                    "price": str(row.get("Price", "")).strip(),
+                    "short_desc": str(row.get("Short Description", "")).strip(),
+                    "long_desc": str(row.get("Long Description", "")).strip(),
+                    "block": block_val,
+                    "specialty": str(row.get("Department/ Specialty", "")).strip()
+                }
+                
+                if hyphen_code:
+                    tariff_map[hyphen_code] = entry
+                if sbs_num:
+                    tariff_map[sbs_num] = entry
+        except Exception:
+            tariff_map = {}
+
+    return pdf_text, icd_list, tariff_map
+
+cchi_index_text, cchi_icd_db, cchi_tariff_map = load_cchi_regulatory_databases()
 
 # ==========================================
 # SIDEBAR: EXECUTIVE ARCHITECT & CREDENTIALS
@@ -285,8 +329,17 @@ You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Do
 You are provided with:
 1. The full text of the official CCHI Saudi Billing System (SBS) Version 3 Dental Alphabetic Index.
 2. The official ICD-10-AM Dental Diagnostic Ground Truth Concept Table.
+3. The official Article 11 Statutory Government Sector Dental Price Schedule.
 
-You MUST reference these sources to identify the exact 9-digit SBS code, the 7-digit ACHI code, the [Block] number, and the correct ICD-10-AM diagnosis for any dental case.
+You MUST reference these sources to output exact 9-digit SBS codes, 7-digit ACHI codes, [Block] numbers, statutory SAR prices, and ICD-10-AM diagnoses.
+
+================================================================================
+CRITICAL RULE: ARTICLE 11 STATUTORY TARIFF ACCURACY
+================================================================================
+1. TARIFF PRICE ENFORCEMENT:
+   - For all billable dental procedures, retrieve the exact statutory price from the Article 11 Tariff ground truth.
+   - If an intermediate stage or component is listed as "part of main service and / or follow ups", or is part of an uncompleted multi-visit fabrication, its current encounter tariff MUST BE "0.00 SAR" with Claim Action Flag [IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE].
+   - When billing the definitive completed procedure (e.g. Denture Insertion 97719-01-70, Crown delivery, completed RCT), apply the full Article 11 statutory tariff.
 
 ================================================================================
 CRITICAL RULE: ICD-10-AM SPECIFICITY & DIAGNOSTIC IMMUTABILITY
@@ -296,10 +349,10 @@ CRITICAL RULE: ICD-10-AM SPECIFICITY & DIAGNOSTIC IMMUTABILITY
    - Caries: K02.0, K02.1, K02.2, K02.3, K02.5.
    - Pulpal / Periapical: K04.0, K04.1, K04.2, K04.4, K04.5, K04.6, K04.7.
    - Periodontal: K05.1, K05.3.
-   - Edentulism / Loss of teeth: K08.1 (Loss of teeth due to accident, extraction, or periodontal disease).
-   - Defective Restorations / Failures: K08.81 (Pathological fracture of tooth), K08.88 (Other specified disorders of teeth and supporting structures).
-   - Status Codes: Z01.2 (Dental examination), Z96.5 (Presence of tooth-root and mandibular implants), Z97.2 (Presence of dental prosthetic device).
-   - Trauma: S02.5 (Fracture of tooth), S03.2 (Dislocation of tooth), S02.60–S02.69 (Mandibular fractures).
+   - Edentulism / Loss of teeth: K08.1.
+   - Failures / Fractures: K08.81 (Pathological fracture of tooth), K08.88 (Other specified disorders).
+   - Status: Z01.2 (Dental examination), Z96.5 (Presence of tooth-root and mandibular implants), Z97.2 (Presence of dental prosthetic device).
+   - Trauma: S02.5 (Fracture of tooth), S03.2 (Dislocation of tooth).
 
 2. DIAGNOSTIC IMMUTABILITY RULE (ANTI-DRIFT):
    - If clinician input contains an existing "[PRIMARY_ICD10]" inside an incoming CONTINUITY BLOCK, YOU MUST LOCK AND REPEAT THAT EXACT CODE.
@@ -311,17 +364,13 @@ UNIVERSAL MULTI-VISIT CONTINUITY & ANTI-UNBUNDLING RULES
 1. RENDERED VS. PLANNED SCOPE DISCIPLINE:
    - ONLY bill procedures that were PHYSICALLY EXECUTED during today's encounter.
    - Services noted as "planned for next visit", "indicated in future", or "pending restorability" MUST NOT appear in the Billable Coding Table for today's encounter.
-   - Diagnostic and Disassembly encounters (Comprehensive Exam 97011-00-00 [450], Radiographs [451], Crown sectioning 97655-00-00 [462]) are FULLY BILLABLE fee-for-service events on Day 1. Do NOT lock them at 0.00 SAR.
+   - Diagnostic and Disassembly encounters (Comprehensive Exam 97011-00-00 [450] - 150 SAR, Radiographs [451] - 120 SAR, Crown sectioning 97655-00-00 [462] - 200 SAR) are FULLY BILLABLE fee-for-service events on Day 1.
 
 2. MULTI-STAGE FABRICATION BUNDLING:
-   - RPD/CD Visits 1-4, Indirect Crown/Bridge Visit 1, Multi-visit RCT Stage 1:
-     * Primary Procedure Claim Action Flag: `[IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE]`.
-     * Tariff: `0.00 SAR`.
-   - Final Insertion Encounters (e.g., Crown cementation, Denture delivery, RCT obturation):
-     * Unlock code as `[PRIMARY CLAIM ITEM - GLOBAL DEFINITIVE]` with full statutory Article 11 tariff.
+   - Intermediate visits (RPD/CD Visits 1-4, Indirect Crown Visit 1, Multi-visit RCT Stage 1) are non-billable components locked to 0.00 SAR.
+   - Final Delivery / Obturation encounter unlocks the global statutory fee.
 
 3. PREPARATORY EXCEPTIONS & ANATOMICAL MULTIPLICITY:
-   - Crown removal (97655-00-00 [462]) must include specific quantity and FDI tooth identifiers (billed per unit).
    - Post and core (97625-xx [463]) inherently includes the coronal core. NEVER bill core build-up (97627-00-00 [463]) on the same tooth receiving a post.
 
 ================================================================================
@@ -362,7 +411,7 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 {sec_num}. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
    - Columns MUST strictly be:
      `Service Description` | `ACHI Code` | `SBS v3.0 Code` | `Block` | `Claim Action Flag` | `Govt Tariff (SAR)* [Art. 11]` | `Bundled Elements (NON-BILLABLE)`
-   - Tariff: 0.00 for intermediate locked visits; realistic statutory Article 11 tariff for standalone or definitive procedures.
+   - Tariff: 0.00 for intermediate locked visits; exact statutory Article 11 tariff for standalone or definitive procedures.
    - Immediately below table: `*Tariff prices are determined in accordance with Article 11: "Dental services pricing in government sector".`
    - Sub-table: "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)" if alternatives exist.
 """)
@@ -398,8 +447,17 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 
     return "".join(instructions)
 
-def generate_scrubbed_package(client, doctor_input, cchi_text, icd_db, system_instruction):
+def generate_scrubbed_package(client, doctor_input, cchi_text, icd_db, tariff_map, system_instruction):
     icd_reference = "\n".join([f"- {item['code']}: {item['title']} ({item['category']})" for item in icd_db]) if icd_db else "[Built-in ICD-10-AM Active]"
+
+    # Pass key tariff entries relevant to the input context
+    tariff_sample = []
+    if tariff_map:
+        for k, v in list(tariff_map.items())[:120]:
+            tariff_sample.append(f"{v['sbs_hyphen']} ({v['sbs_code']}) | Block {v['block']} | {v['short_desc']} -> SAR {v['price']}")
+        tariff_reference = "\n".join(tariff_sample)
+    else:
+        tariff_reference = "[Article 11 Built-in Tariffs Active]"
 
     prompt_payload = f"""
 OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX (ACHI PROCEDURES GROUND TRUTH):
@@ -407,6 +465,9 @@ OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX (ACHI PROCEDURES GROUND TRUT
 
 OFFICIAL ICD-10-AM DENTAL DIAGNOSTIC CONCEPT TABLE (MANDATORY DIAGNOSIS GROUND TRUTH):
 {icd_reference}
+
+OFFICIAL CCHI ARTICLE 11 STATUTORY DENTAL TARIFF SCHEDULE:
+{tariff_reference}
 
 CLINICIAN ENCOUNTER CASE SUMMARY:
 {doctor_input}
@@ -494,14 +555,14 @@ with col_out:
         elif not (inc_icd or inc_billing or inc_checklist or note_style != "Coding & Regulatory Audit Only (Skip Note)"):
             st.warning("Select at least one output section to compile.")
         else:
-            with st.spinner("Scrubbing documentation against CCHI SBS v3.0 & validating NPHIES state..."):
+            with st.spinner("Scrubbing documentation against CCHI SBS v3.0 & Article 11 Tariffs..."):
                 try:
                     client = genai.Client(api_key=api_key)
                     dynamic_sys_instruction = construct_dynamic_instructions(
                         inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
                     )
                     raw_result = generate_scrubbed_package(
-                        client, doctor_input, cchi_index_text, cchi_icd_db, dynamic_sys_instruction
+                        client, doctor_input, cchi_index_text, cchi_icd_db, cchi_tariff_map, dynamic_sys_instruction
                     )
                     
                     # Robust Dual-Pattern Token Matcher
