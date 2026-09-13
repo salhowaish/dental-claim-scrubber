@@ -1,7 +1,8 @@
 import os
 import re
-import streamlit as st
+import json
 import time
+import streamlit as st
 from pypdf import PdfReader
 from google import genai
 from google.genai import types
@@ -14,130 +15,151 @@ st.set_page_config(
 )
 
 # ==========================================
-# ENTERPRISE CLINICAL CSS THEME
+# ENTERPRISE CLINICAL CSS THEME (CANVAS-LOCKED)
 # ==========================================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
-    html, body, [class*="css"] {
+    /* Enforce Dark Canvas Across All Devices & OS Themes */
+    html, body, .stApp {
+        background-color: #0B0F19 !important;
+        color: #F8FAFC !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
-    /* Top Bar & Branding */
+    /* Top Bar & Header Structure */
     .brand-header {
-        margin-bottom: 1.5rem;
-        padding-bottom: 1.1rem;
+        margin-bottom: 1.25rem;
+        padding-bottom: 1rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
-    .brand-title-row {
+    .brand-top-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .brand-title-group {
         display: flex;
         align-items: baseline;
-        gap: 0.75rem;
-        margin-bottom: 0.35rem;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.75rem;
     }
     .brand-title {
         font-size: 2.1rem;
         font-weight: 800;
         letter-spacing: -0.03em;
-        color: #F8FAFC;
+        color: #F8FAFC !important;
+        margin: 0;
+        line-height: 1.1;
     }
     .brand-author {
-        font-size: 1.05rem;
+        font-size: 1rem;
         font-weight: 600;
-        color: #38BDF8;
+        color: #38BDF8 !important;
         letter-spacing: -0.01em;
+        white-space: nowrap;
     }
     .brand-subtitle {
-        font-size: 0.88rem;
+        font-size: 0.84rem;
         font-weight: 400;
-        color: #94A3B8;
+        color: #94A3B8 !important;
         line-height: 1.45;
+        margin-top: 0.4rem;
     }
     
     /* Tag Pills */
+    .tag-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+    }
     .tag-pill {
         display: inline-block;
         padding: 0.22rem 0.65rem;
         border-radius: 9999px;
-        font-size: 0.72rem;
+        font-size: 0.7rem;
         font-weight: 600;
         letter-spacing: 0.03em;
         text-transform: uppercase;
         background: rgba(14, 165, 233, 0.12);
-        color: #38BDF8;
+        color: #38BDF8 !important;
         border: 1px solid rgba(56, 189, 248, 0.25);
-        margin-right: 0.35rem;
     }
     .tag-pill-gold {
         background: rgba(245, 158, 11, 0.12);
-        color: #FBBF24;
+        color: #FBBF24 !important;
         border: 1px solid rgba(245, 158, 11, 0.25);
     }
     
-    /* Executive Profile Card */
+    /* Executive Profile Card (Sidebar) */
     .profile-card {
-        background: rgba(30, 41, 59, 0.45);
+        background: rgba(30, 41, 59, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 10px;
-        padding: 1.2rem;
+        padding: 1.15rem;
         margin-bottom: 1.25rem;
     }
     .profile-name {
         font-size: 1.1rem;
         font-weight: 700;
-        color: #F8FAFC;
+        color: #F8FAFC !important;
         margin-bottom: 0.2rem;
-        letter-spacing: -0.01em;
     }
     .profile-role {
         font-size: 0.82rem;
         font-weight: 600;
-        color: #38BDF8;
+        color: #38BDF8 !important;
         margin-bottom: 0.15rem;
     }
     .profile-org {
         font-size: 0.76rem;
-        color: #94A3B8;
+        color: #94A3B8 !important;
         line-height: 1.4;
         margin-bottom: 0.75rem;
     }
     .profile-contact {
         font-size: 0.75rem;
-        color: #CBD5E1;
+        color: #CBD5E1 !important;
         line-height: 1.65;
         padding-top: 0.65rem;
         border-top: 1px solid rgba(255, 255, 255, 0.06);
     }
     .profile-contact a {
-        color: #38BDF8;
+        color: #38BDF8 !important;
         text-decoration: none;
     }
     .profile-contact a:hover {
         text-decoration: underline;
     }
     
-    /* Section Headings */
+    /* Typography & Section Titles */
     .sub-section-title {
         font-size: 0.72rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: #64748B;
+        color: #94A3B8 !important;
         margin-top: 0.95rem;
         margin-bottom: 0.4rem;
     }
     
-    /* Input Container Box */
+    /* Input Form Fields */
     .stTextArea textarea {
+        background-color: #161F30 !important;
+        color: #F8FAFC !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
         border-radius: 8px !important;
         font-size: 0.88rem !important;
         line-height: 1.5 !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-        background-color: rgba(15, 23, 42, 0.5) !important;
+    }
+    .stTextArea textarea::placeholder {
+        color: #64748B !important;
     }
     
-    /* Primary Button Styling */
+    /* Button Controls */
     div.stButton > button:first-child {
         border-radius: 6px;
         font-weight: 600;
@@ -145,29 +167,60 @@ st.markdown("""
         letter-spacing: 0.01em;
         padding: 0.55rem 1.2rem;
     }
+
+    /* Mobile Adaptations */
+    @media (max-width: 768px) {
+        .brand-top-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+        .brand-title {
+            font-size: 1.65rem;
+        }
+        .brand-author {
+            font-size: 0.88rem;
+        }
+        .tag-container {
+            margin-top: 0.2rem;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# CACHED CCHI DENTAL INDEX EXTRACTOR
+# CACHED REGULATORY GROUND TRUTH LOADERS
 # ==========================================
 @st.cache_data(show_spinner=False)
-def load_cchi_dental_index():
+def load_cchi_regulatory_databases():
+    # 1. Load SBS Procedure Index (PDF)
+    pdf_text = ""
     pdf_filename = "sbs_dental_index.pdf"
-    if not os.path.exists(pdf_filename):
-        return ""
-    try:
-        reader = PdfReader(pdf_filename)
-        extracted = []
-        for i, page in enumerate(reader.pages):
-            text = page.extract_text()
-            if text:
-                extracted.append(f"--- PAGE {i+1} ---\n{text}")
-        return "\n".join(extracted)
-    except Exception:
-        return ""
+    if os.path.exists(pdf_filename):
+        try:
+            reader = PdfReader(pdf_filename)
+            extracted = []
+            for i, page in enumerate(reader.pages):
+                text = page.extract_text()
+                if text:
+                    extracted.append(f"--- PAGE {i+1} ---\n{text}")
+            pdf_text = "\n".join(extracted)
+        except Exception:
+            pdf_text = ""
 
-cchi_index_text = load_cchi_dental_index()
+    # 2. Load ICD-10-AM Diagnostic Ground Truth (JSON)
+    icd_list = []
+    json_filename = "cchi_dental_icd10.json"
+    if os.path.exists(json_filename):
+        try:
+            with open(json_filename, "r", encoding="utf-8") as f:
+                icd_list = json.load(f)
+        except Exception:
+            icd_list = []
+
+    return pdf_text, icd_list
+
+cchi_index_text, cchi_icd_db = load_cchi_regulatory_databases()
 
 # ==========================================
 # SIDEBAR: EXECUTIVE ARCHITECT & CREDENTIALS
@@ -207,21 +260,19 @@ with st.sidebar:
 # ==========================================
 st.markdown("""
 <div class="brand-header">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div>
-            <div class="brand-title-row">
-                <span class="brand-title">FERRULE</span>
-                <span class="brand-author">by Dr. Sulaiman Alhowaish</span>
-            </div>
-            <div class="brand-subtitle">
-                Autonomous Clinical Documentation & NPHIES SBS v3.0 Revenue Assurance Engine
-            </div>
+    <div class="brand-top-row">
+        <div class="brand-title-group">
+            <h1 class="brand-title">FERRULE</h1>
+            <span class="brand-author">by Dr. Sulaiman Alhowaish</span>
         </div>
-        <div style="text-align: right; padding-top: 0.25rem;">
+        <div class="tag-container">
             <span class="tag-pill">SBS v3.0</span>
             <span class="tag-pill">ACHI 10th Ed</span>
             <span class="tag-pill-gold">NPHIES Core</span>
         </div>
+    </div>
+    <div class="brand-subtitle">
+        Autonomous Clinical Documentation & NPHIES SBS v3.0 Revenue Assurance Engine
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -231,32 +282,36 @@ st.markdown("""
 # ==========================================
 BASE_PRINCIPLES = """
 You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Documentation Auditor in Saudi Arabia.
-You are provided with the full text of the official Council of Health Insurance (CCHI) Saudi Billing System (SBS) Version 3 Dental Alphabetic Index.
-You MUST search this index to identify the exact 9-digit SBS code, the 7-digit ACHI code, and the [Block] number for any dental intervention.
+You are provided with:
+1. The full text of the official CCHI Saudi Billing System (SBS) Version 3 Dental Alphabetic Index.
+2. The official ICD-10-AM Dental Diagnostic Ground Truth Concept Table.
+
+You MUST reference these sources to identify the exact 9-digit SBS code, the 7-digit ACHI code, the [Block] number, and the correct ICD-10-AM diagnosis for any dental case.
 
 ================================================================================
-CRITICAL RULE: ICD-10-AM 10TH EDITION SPECIFICITY & DIAGNOSTIC LOCK
+CRITICAL RULE: ICD-10-AM SPECIFICITY & DIAGNOSTIC IMMUTABILITY
 ================================================================================
-1. USE ONLY AUSTRALIAN 10TH EDITION CODES (NEVER USE RETIRED CODES):
-   - Edentulism / Loss of teeth: Use K08.41 (Complete edentulism, both jaws), K08.42 (Complete edentulism, single jaw), K08.43 (Partial edentulism, multiple missing), K08.44 (Partial edentulism, single missing). NEVER USE K08.1 (RETIRED).
-   - Defective Restorations: Use K08.51 (Aesthetic failure), K08.52 (Overhang/defective margin/gap), K08.53 (Fractured restoration). NEVER USE K08.87.
-   - Caries: K02.51, K02.52, K02.53 (Arrested/enamel/dentin with pulp involvement), K02.61, K02.62, K02.63 (Smooth surface), K02.71, K02.72 (Root caries).
-   - Pulpal / Periapical: K04.01 (Reversible pulpitis), K04.02 (Irreversible pulpitis), K04.1 (Necrosis of pulp), K04.5 (Chronic apical periodontitis), K04.7 (Periapical abscess without sinus).
-   - Periodontal: K05.10 (Chronic gingivitis), K05.31 (Chronic periodontitis, localized), K05.32 (Chronic periodontitis, generalized).
-   - Surgical / Impacted: K01.1 (Impacted teeth), K01.0 (Embedded teeth).
-   - Trauma: S02.51 (Enamel fracture), S02.52 (Crown fracture without pulp), S02.53 (Crown fracture with pulp), S03.2X1 (Luxation).
+1. STRICT ADHERENCE TO GROUND TRUTH TABLE:
+   - Select diagnostic codes strictly from the provided ICD-10-AM Concept Table.
+   - Caries: K02.0, K02.1, K02.2, K02.3, K02.5.
+   - Pulpal / Periapical: K04.0, K04.1, K04.2, K04.4, K04.5, K04.6, K04.7.
+   - Periodontal: K05.1, K05.3.
+   - Edentulism / Loss of teeth: K08.1 (Loss of teeth due to accident, extraction, or periodontal disease).
+   - Defective Restorations / Failures: K08.81 (Pathological fracture of tooth), K08.88 (Other specified disorders of teeth and supporting structures).
+   - Status Codes: Z01.2 (Dental examination), Z96.5 (Presence of tooth-root and mandibular implants), Z97.2 (Presence of dental prosthetic device).
+   - Trauma: S02.5 (Fracture of tooth), S03.2 (Dislocation of tooth), S02.60–S02.69 (Mandibular fractures).
 
 2. DIAGNOSTIC IMMUTABILITY RULE (ANTI-DRIFT):
-   - If clinician input contains an existing "[PRIMARY_ICD10]" in a CONTINUITY BLOCK, YOU MUST RETAIN THAT EXACT CODE.
-   - DO NOT alter, generalize, or shift the ICD-10-AM code across follow-up encounters of the same clinical episode.
+   - If clinician input contains an existing "[PRIMARY_ICD10]" inside an incoming CONTINUITY BLOCK, YOU MUST LOCK AND REPEAT THAT EXACT CODE.
+   - DO NOT alter, generalize, or shift the ICD-10-AM code across follow-up encounters of the same episode.
 
 ================================================================================
 UNIVERSAL MULTI-VISIT CONTINUITY & ANTI-UNBUNDLING RULES
 ================================================================================
 1. RENDERED VS. PLANNED SCOPE DISCIPLINE:
-   - ONLY bill procedures that were PHYSICALLY EXECUTED during today's visit.
+   - ONLY bill procedures that were PHYSICALLY EXECUTED during today's encounter.
    - Services noted as "planned for next visit", "indicated in future", or "pending restorability" MUST NOT appear in the Billable Coding Table for today's encounter.
-   - Day 1 Disassembly / Diagnostic encounters (Exams, Radiographs, Crown sectioning 97655-00-00 [462]) are FULLY BILLABLE fee-for-service events. Do NOT lock them at 0.00 SAR.
+   - Diagnostic and Disassembly encounters (Comprehensive Exam 97011-00-00 [450], Radiographs [451], Crown sectioning 97655-00-00 [462]) are FULLY BILLABLE fee-for-service events on Day 1. Do NOT lock them at 0.00 SAR.
 
 2. MULTI-STAGE FABRICATION BUNDLING:
    - RPD/CD Visits 1-4, Indirect Crown/Bridge Visit 1, Multi-visit RCT Stage 1:
@@ -267,7 +322,7 @@ UNIVERSAL MULTI-VISIT CONTINUITY & ANTI-UNBUNDLING RULES
 
 3. PREPARATORY EXCEPTIONS & ANATOMICAL MULTIPLICITY:
    - Crown removal (97655-00-00 [462]) must include specific quantity and FDI tooth identifiers (billed per unit).
-   - Post and core (97625-xx [463]) includes the core. NEVER bill core build-up (97627-00-00 [463]) on the same tooth receiving a post.
+   - Post and core (97625-xx [463]) inherently includes the coronal core. NEVER bill core build-up (97627-00-00 [463]) on the same tooth receiving a post.
 
 ================================================================================
 CRITICAL FORMATTING MANDATE FOR CASE CONTINUITY BLOCK
@@ -277,7 +332,7 @@ You MUST output the continuity metadata block enclosed STRICTLY between `<NPHIES
 Format inside the tags strictly as:
 <NPHIES_BLOCK>
 [EPISODE_ID]: [Specialty]-[Procedure]-[FDI Tooth/Arch]
-[PRIMARY_ICD10]: [Code] — [Accurate 10th Ed Description]
+[PRIMARY_ICD10]: [Code] — [Accurate Description]
 [PRIMARY_SBS_CODE]: [SBS 9-digit Code] [Block]
 [CURRENT_STAGE]: Visit [X] of [Total Visits] — [Description of Today's Step]
 [BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / BILLABLE ENCOUNTER (Tariff SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
@@ -297,8 +352,8 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
     
     if inc_icd:
         instructions.append(f"""
-{sec_num}. PRIMARY DIAGNOSIS & ETIOLOGY (ICD-10-AM 10th Ed)
-   - Specific, modern ICD-10-AM code. If site/cause is unspecified, provide code with `[Specify Tooth/Arch]` placeholder.
+{sec_num}. PRIMARY DIAGNOSIS & ETIOLOGY (ICD-10-AM)
+   - Specific, valid ICD-10-AM code from the ground truth table. If site/cause is unspecified, provide code with `[Specify Tooth/Arch]` placeholder.
 """)
         sec_num += 1
 
@@ -343,10 +398,15 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 
     return "".join(instructions)
 
-def generate_scrubbed_package(client, doctor_input, cchi_text, system_instruction):
+def generate_scrubbed_package(client, doctor_input, cchi_text, icd_db, system_instruction):
+    icd_reference = "\n".join([f"- {item['code']}: {item['title']} ({item['category']})" for item in icd_db]) if icd_db else "[Built-in ICD-10-AM Active]"
+
     prompt_payload = f"""
-OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX REFERENCE (ATTACHED GROUND TRUTH):
+OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX (ACHI PROCEDURES GROUND TRUTH):
 {cchi_text if cchi_text else "[Built-in ACHI/SBS Knowledge Active]"}
+
+OFFICIAL ICD-10-AM DENTAL DIAGNOSTIC CONCEPT TABLE (MANDATORY DIAGNOSIS GROUND TRUTH):
+{icd_reference}
 
 CLINICIAN ENCOUNTER CASE SUMMARY:
 {doctor_input}
@@ -441,7 +501,7 @@ with col_out:
                         inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
                     )
                     raw_result = generate_scrubbed_package(
-                        client, doctor_input, cchi_index_text, dynamic_sys_instruction
+                        client, doctor_input, cchi_index_text, cchi_icd_db, dynamic_sys_instruction
                     )
                     
                     # Robust Dual-Pattern Token Matcher
