@@ -106,10 +106,11 @@ st.markdown("""
         margin-bottom: 0.2rem;
     }
     .profile-role {
-        font-size: 0.82rem;
+        font-size: 0.80rem;
         font-weight: 600;
         color: #38BDF8 !important;
         margin-bottom: 0.15rem;
+        line-height: 1.35;
     }
     .profile-org {
         font-size: 0.76rem;
@@ -159,6 +160,14 @@ st.markdown("""
         padding: 0.55rem 1.2rem;
     }
 
+    .interactive-card {
+        background: rgba(14, 165, 233, 0.08);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
     @media (max-width: 768px) {
         .brand-top-row {
             flex-direction: column;
@@ -177,6 +186,16 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ==========================================
+# SESSION STATE INITIALIZATION
+# ==========================================
+if "discovery_questions" not in st.session_state:
+    st.session_state.discovery_questions = None
+if "pending_case_input" not in st.session_state:
+    st.session_state.pending_case_input = ""
+if "final_scrubbed_output" not in st.session_state:
+    st.session_state.final_scrubbed_output = None
 
 # ==========================================
 # CACHED REGULATORY GROUND TRUTH LOADERS
@@ -243,7 +262,7 @@ with st.sidebar:
     st.markdown("""
     <div class="profile-card">
         <div class="profile-name">Dr. Sulaiman Alhowaish</div>
-        <div class="profile-role">Deputy Manager, Dental Department</div>
+        <div class="profile-role">Deputy Manager & Prosthodontics Registrar, Dental Department</div>
         <div class="profile-org">
             Alyamamah Hospital<br>
             Riyadh Second Health Cluster (R2)
@@ -262,7 +281,7 @@ with st.sidebar:
     * **MSc** | Executive Master in Insurance (KSU)  
     * **BDS** | Bachelor of Dental Surgery  
     * **CPC®** | Certified Professional Coder (AAPC)  
-    * **IBM SkillsBuild** | AI in Healthcare (3Q-2026-ET)
+    * **IBM SkillsBuild** | AI in Healthcare
     """)
 
     api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.text_input("Gemini API Key", type="password")
@@ -383,6 +402,44 @@ Enclose strictly between <NPHIES_BLOCK> and </NPHIES_BLOCK> tags at the very end
 </NPHIES_BLOCK>
 """
 
+DISCOVERY_EVALUATOR_PROMPT = """
+You are an expert Dental Clinical Documentation Specialist and Revenue Cycle Auditor in Saudi Arabia.
+Your task is to analyze a clinician's preliminary case notes and determine whether critical data points required by CCHI, NPHIES, and Saudi Billing System Coding Standards (SBSCS v3.0) are missing or ambiguous.
+
+CRITICAL CLINICAL & REGULATORY CHECKS:
+1. Anatomical Site: Is an exact FDI two-digit tooth number (11-48, 51-85) or specific quadrant/arch clearly specified?
+2. Diagnostic Specificity: Is the pulpal/periapical status, caries depth, tooth wear, or edentulous condition precise?
+3. Objective Radiography: Are the required pre-op, working length, or post-op radiographs explicitly mentioned?
+4. Procedural Mechanics:
+   - For restorations: Are specific surfaces (O, MO, MOD, etc.) and materials clear?
+   - For RCT: Is it emergency extirpation vs. definitive obturation? Canals identified?
+   - For crowns: Is it preparation/provisional vs. definitive delivery?
+   - For surgery/implants: Are torque, flap details, or bone levels noted?
+5. Anesthesia & Isolation: Are local anesthesia (infiltration/block) and rubber dam isolation documented?
+
+OUTPUT FORMAT:
+- If the case is thoroughly detailed and ready for instant audit without ambiguity, respond with EXACTLY:
+  `[READY_TO_AUDIT]`
+- If critical information is missing, ambiguous, or incomplete, DO NOT generate the final audit. Instead, output:
+  ### 📋 Interactive Intake Assessment
+  Provide a brief 1-2 sentence evaluation of the case clarity.
+
+  ### ❓ Clinician Clarification Checklist:
+  Provide 3 to 5 concise, actionable clinical questions to help the clinician supply the missing facts. For each question, offer quick-select hints or examples (e.g. *Tooth #46?*, *Infiltration vs. ID Block?*, *Surfaces: MOD?*, *Pre-op PA taken?*).
+"""
+
+def evaluate_encounter_completeness(client, doctor_input):
+    prompt = f"CLINICIAN ENCOUNTER ENTRY:\n{doctor_input}"
+    response = client.models.generate_content(
+        model="gemini-3.7-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=DISCOVERY_EVALUATOR_PROMPT,
+            temperature=0.1,
+        )
+    )
+    return response.text.strip()
+
 def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway):
     instructions = [BASE_PRINCIPLES]
     
@@ -495,6 +552,12 @@ with col_in:
         height=180
     )
     
+    guided_mode = st.checkbox(
+        "Enable Interactive Guided Discovery Mode",
+        value=False,
+        help="Recommended for trainees and busy clinicians. If key details (FDI tooth number, vital signs, radiograph types, or specific surfaces) are missing, FERRULE pauses to ask clarifying questions before generating the final claim."
+    )
+    
     st.markdown('<div class="sub-section-title">Audit Package Configuration</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -539,6 +602,7 @@ with col_in:
 
 with col_out:
     st.markdown('<div class="sub-section-title">Compliance Audit & Scrubbed Record</div>', unsafe_allow_html=True)
+    
     if submit_btn:
         if not api_key:
             st.error("Missing Gemini API credentials. Configure GEMINI_API_KEY in repository secrets.")
@@ -547,36 +611,104 @@ with col_out:
         elif not (inc_icd or inc_billing or inc_checklist or note_style != "Coding & Regulatory Audit Only (Skip Note)"):
             st.warning("Select at least one output section to compile.")
         else:
-            with st.spinner("Scrubbing documentation against CCHI SBS v3.0 & Article 11 Tariffs..."):
-                try:
-                    client = genai.Client(api_key=api_key)
-                    dynamic_sys_instruction = construct_dynamic_instructions(
-                        inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
-                    )
-                    raw_result = generate_scrubbed_package(
-                        client, doctor_input, cchi_index_text, cchi_icd_db, cchi_tariff_reference, dynamic_sys_instruction
-                    )
-                    
-                    nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
-                    if nphies_match:
-                        block_content = nphies_match.group(1).strip()
-                        clean_markdown = re.sub(r"<NPHIES_BLOCK>.*?</NPHIES_BLOCK>", "", raw_result, flags=re.DOTALL).strip()
-                    else:
-                        fallback_match = re.search(r"(\[EPISODE_ID\].*?\[ANTI-UNBUNDLING_LOCK\].*?$)", raw_result, re.DOTALL)
-                        if fallback_match:
-                            block_content = fallback_match.group(1).strip()
-                            clean_markdown = raw_result[:fallback_match.start()].strip()
-                            clean_markdown = re.sub(r"(?:🔄\s*)?(?:NPHIES Case Continuity Token.*?$|NPHIES CASE CONTINUITY BLOCK.*?$)", "", clean_markdown, flags=re.MULTILINE).strip()
+            client = genai.Client(api_key=api_key)
+            st.session_state.final_scrubbed_output = None
+            
+            if guided_mode:
+                with st.spinner("Analyzing case completeness against CCHI/NPHIES criteria..."):
+                    try:
+                        discovery_eval = evaluate_encounter_completeness(client, doctor_input)
+                        if "[READY_TO_AUDIT]" in discovery_eval:
+                            st.session_state.discovery_questions = None
+                            st.session_state.pending_case_input = ""
+                            dynamic_sys_instruction = construct_dynamic_instructions(
+                                inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
+                            )
+                            st.session_state.final_scrubbed_output = generate_scrubbed_package(
+                                client, doctor_input, cchi_index_text, cchi_icd_db, cchi_tariff_reference, dynamic_sys_instruction
+                            )
                         else:
-                            block_content = None
-                            clean_markdown = raw_result.strip()
-                    
-                    st.markdown(clean_markdown)
-                    
-                    if block_content:
-                        st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
-                        st.caption("NPHIES Episode Continuity Token (Persist across multi-visit encounters):")
-                        st.code(block_content, language="text")
-                    
-                except Exception as e:
-                    st.error(f"Audit engine execution failed: {str(e)}")
+                            st.session_state.discovery_questions = discovery_eval
+                            st.session_state.pending_case_input = doctor_input
+                    except Exception as e:
+                        st.error(f"Guided analysis failed: {str(e)}")
+            else:
+                st.session_state.discovery_questions = None
+                st.session_state.pending_case_input = ""
+                with st.spinner("Scrubbing documentation against CCHI SBS v3.0 & Article 11 Tariffs..."):
+                    try:
+                        dynamic_sys_instruction = construct_dynamic_instructions(
+                            inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
+                        )
+                        st.session_state.final_scrubbed_output = generate_scrubbed_package(
+                            client, doctor_input, cchi_index_text, cchi_icd_db, cchi_tariff_reference, dynamic_sys_instruction
+                        )
+                    except Exception as e:
+                        st.error(f"Audit engine execution failed: {str(e)}")
+
+    # Guided Discovery Mode: Clarification Loop
+    if st.session_state.discovery_questions:
+        st.markdown('<div class="interactive-card">', unsafe_allow_html=True)
+        st.markdown(st.session_state.discovery_questions)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        clarification_input = st.text_area(
+            "Quick Clinician Clarifications (Type missing details below):",
+            placeholder="e.g. Tooth #36, vital cold test negative, pre-op PA taken, 3 canals instrumented, Cavit temp placed...",
+            height=110
+        )
+        
+        btn_c1, btn_c2 = st.columns([1, 1])
+        with btn_c1:
+            finalize_guided = st.button("Finalize & Generate Audit-Proof Claim", type="primary", use_container_width=True)
+        with btn_c2:
+            cancel_guided = st.button("Reset / Clear Assessment", use_container_width=True)
+            
+        if cancel_guided:
+            st.session_state.discovery_questions = None
+            st.session_state.pending_case_input = ""
+            st.session_state.final_scrubbed_output = None
+            st.rerun()
+            
+        if finalize_guided:
+            if not api_key:
+                st.error("Missing Gemini API credentials.")
+            else:
+                with st.spinner("Synthesizing clinical input and running regulatory audit..."):
+                    try:
+                        client = genai.Client(api_key=api_key)
+                        merged_input = f"{st.session_state.pending_case_input}\n\nCLINICAL CLARIFICATIONS PROVIDED:\n{clarification_input}"
+                        dynamic_sys_instruction = construct_dynamic_instructions(
+                            inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
+                        )
+                        st.session_state.final_scrubbed_output = generate_scrubbed_package(
+                            client, merged_input, cchi_index_text, cchi_icd_db, cchi_tariff_reference, dynamic_sys_instruction
+                        )
+                        st.session_state.discovery_questions = None
+                        st.session_state.pending_case_input = ""
+                    except Exception as e:
+                        st.error(f"Finalization failed: {str(e)}")
+
+    # Render Final Audit Results
+    if st.session_state.final_scrubbed_output:
+        raw_result = st.session_state.final_scrubbed_output
+        nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
+        if nphies_match:
+            block_content = nphies_match.group(1).strip()
+            clean_markdown = re.sub(r"<NPHIES_BLOCK>.*?</NPHIES_BLOCK>", "", raw_result, flags=re.DOTALL).strip()
+        else:
+            fallback_match = re.search(r"(\[EPISODE_ID\].*?\[ANTI-UNBUNDLING_LOCK\].*?$)", raw_result, re.DOTALL)
+            if fallback_match:
+                block_content = fallback_match.group(1).strip()
+                clean_markdown = raw_result[:fallback_match.start()].strip()
+                clean_markdown = re.sub(r"(?:🔄\s*)?(?:NPHIES Case Continuity Token.*?$|NPHIES CASE CONTINUITY BLOCK.*?$)", "", clean_markdown, flags=re.MULTILINE).strip()
+            else:
+                block_content = None
+                clean_markdown = raw_result.strip()
+        
+        st.markdown(clean_markdown)
+        
+        if block_content:
+            st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+            st.caption("NPHIES Episode Continuity Token (Persist across multi-visit encounters):")
+            st.code(block_content, language="text")
