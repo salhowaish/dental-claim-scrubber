@@ -332,7 +332,7 @@ You are grounded in:
   * LEVEL 1 NPHIES VIOLATION ALERT: Requesting PA for services < 500 SAR (e.g. routine exams, radiographs, simple extractions, minor fillings) is an official violation. Mark these strictly as:
     [PA EXEMPT: Clean Direct Claim (Service < 500 SAR Threshold)].
 - PA MANDATORY (Services >= 500 SAR & Major Interventions):
-  Indirect crowns [Block 470], bridges [Block 471], dentures [Block 474], implants [Block 400], completed RCT [Block 462], and surgical extractions [Block 458] require pre-approval.
+  Indirect crowns [Block 470], bridges [Block 471], dentures [Block 474], implants [Block 400], completed RCT [Block 462], surgical extractions [Block 458], and periodontal surgery [Block 456] require pre-approval.
   * STATUTORY 60-MIN SLA: Insurers must adjudicate requests within 60 minutes. If delayed beyond 60 minutes, the service is legally DEEMED APPROVED under Chapter 5.
   * REJECTION SAFEGUARD: Rejections can only be issued by a Senior Specialist (أخصائي أول) in the same clinical specialty.
 - EMERGENCY & ACUTE PAIN: Triage levels 1-3 and emergency pulp extirpation (97419-00-10) are PA-EXEMPT under the 24-hour notification rule.
@@ -361,14 +361,30 @@ You are grounded in:
   * Surgical removal of impacted tooth (partial bony): 97321-01-00 [458] (SAR 1,500).
   * Surgical removal of impacted tooth (complete bony): 97321-02-00 [458] (SAR 1,500).
   * Note: 97322-09/10 is reserved exclusively for Full Upper/Lower Dental Clearance (SAR 3,000).
-  * Flap elevation, debridement, bone contouring, and suturing are bundled into surgical extraction.
+  * Flap elevation, debridement, bone contouring, and suturing are bundled into surgical extraction. Under SBSCS 4091, soft tissue wound repair codes (30032/30035 [1635]) must NEVER be used for closure of dental surgical incisions.
+- PERIODONTICS & REGENERATION (SBSCS 4020 & 4021):
+  * STATUTORY FLAP RULE (SBSCS 4021 Rule 1): Tissue regeneration does NOT include flap entry and closure, and SHALL be coded separately when documented.
+    - Code 97271-01-00 [456] Open flap or curettage surgery; per tooth or implant (SAR 1,000.00), OR 97232-00-10 [456] Periodontal flap procedure, per quadrant (SAR 1,000.00).
+  * REGENERATIVE & MEMBRANE RULES (SBSCS 4021 Rule 2):
+    - Bone graft, natural: 97244-00-00 [456] (SAR 2,000.00).
+    - Guided tissue regeneration / resorbable membrane: If documented, a separate code SHALL be assigned for resorbable barrier membrane placement: 97236-00-00 [456] Guided tissue regeneration (SAR 1,500.00).
+  * MEDICAL NECESSITY THRESHOLD: Quadrant SRP (97222-00-10) and surgical access require documented clinical probing depth >= 4mm, bleeding on probing (BOP), and prior failure of conservative therapy.
 - PROSTHODONTICS (SBSCS 4060):
   * Removable denture fabrication steps (97719-01-10 through 97719-01-60 and 97719-01-80) are STATUTORY NON-BILLABLE items for documentation only (0.00 SAR, [IN-PROGRESS / BUNDLED ENCOUNTER]).
   * Full denture insertion (97719-01-70 / 97719-00-00) unlocks the global statutory fee (SAR 8,000).
-  * Post & Core (97625-xx): Includes core build-up. Never bill separate core build-up (97627-00-10) on the same tooth receiving a post.
-- ORTHODONTICS (SBSCS 4080):
-  * Comprehensive orthodontic exam (97011-00-20 [450], SAR 500.00) INHERENTLY INCLUDES: intraoral photos, extraoral photos, OPG, cephalometric radiographs, cephalometric tracings, and study casts/digital models.
-  * STRICT ANTI-UNBUNDLING RULE: Under SBSCS 4080 Rule 1, NONE of these diagnostic records can be assigned a separate billable code or fee when 97011-00-20 is billed. They MUST appear only as bundled non-billable elements (0.00 SAR).
+  * Post & Core (97625-xx): Includes core build-up. Never bill separate core build-up (97627-00-10 / 97575-00-10) on the same tooth receiving a post.
+- ORTHODONTICS (SBSCS 4080 & 4081):
+  * COMPREHENSIVE ORTHO EXAM BUNDLING MANDATE (SBSCS 4080):
+    Code 97011-00-20 [450] Comprehensive oral examination for orthodontic treatment (SAR 500.00) INHERENTLY INCLUDES:
+    1. Intraoral photographic records (97072-xx)
+    2. Extraoral photographic records (97073-xx)
+    3. Orthopantomography / OPG (57960-00-00 / 57933-xx)
+    4. Cephalometry / lateral cephalometric radiography (57902-xx)
+    5. Cephalometric tracing, Steiner analysis, or pantographic tracing (97081-xx, 97083-xx)
+    6. Preparation of dental diagnostic cast or 3D digital study models (97071-xx)
+    7. Radiographs.
+  * STRICT ANTI-UNBUNDLING RULE: Under SBSCS 4080 Rule 1, NONE of the above diagnostic records may be assigned a separate billable code or fee when 97011-00-20 is billed. They MUST appear only as non-billable bundled elements (SAR 0.00).
+
 ================================================================================
 3. ARTICLE 11 STATUTORY GOVERNMENT TARIFF PRICING
 ================================================================================
@@ -377,6 +393,7 @@ Key Reference Benchmarks:
 - Comprehensive Oral Exam (97011-00-00): 150 SAR
 - Periodic Oral Exam (97012-00-00): 100 SAR
 - Limited / Emergency Oral Exam (97013-00-00 / 97915-00-10): 100 SAR
+- Comprehensive Orthodontic Exam (97011-00-20): 500 SAR
 - Intraoral PA Radiograph (97022-00-10): 120 SAR
 - Bitewing Radiograph (97022-00-20): 120 SAR
 - Routine Tooth Extraction (97311-01-10): 300 SAR
@@ -388,6 +405,9 @@ Key Reference Benchmarks:
 - Porcelain Fused to Metal Crown (97615-10-00): 2,500 SAR
 - Complete Denture Insertion (97719-01-70): 8,000 SAR
 - One-Stage Implant Fixture (45846-00-00): 4,000 SAR
+- Open Flap / Curettage Surgery, per tooth/implant (97271-01-00): 1,000 SAR
+- Periodontal Bone Graft, Natural (97244-00-00): 2,000 SAR
+- Guided Tissue Regeneration (97236-00-00): 1,500 SAR
 
 ================================================================================
 4. CASE CONTINUITY METADATA BLOCK MANDATE
@@ -417,6 +437,8 @@ CRITICAL CLINICAL & REGULATORY CHECKS:
    - For RCT: Is it emergency extirpation vs. definitive obturation? Canals identified?
    - For crowns: Is it preparation/provisional vs. definitive delivery?
    - For surgery/implants: Are torque, flap details, or bone levels noted?
+   - For orthodontics: Is it diagnostic workup (SBSCS 4080) vs. active appliance therapy?
+   - For periodontics: Are probing depths (>= 4mm), BOP, and bone loss documented?
 5. Anesthesia & Isolation: Are local anesthesia (infiltration/block) and rubber dam isolation documented?
 
 OUTPUT FORMAT:
@@ -656,7 +678,7 @@ with col_out:
         
         clarification_input = st.text_area(
             "Quick Clinician Clarifications (Type missing details below):",
-            placeholder="e.g. Tooth #36, vital cold test negative, pre-op PA taken, 3 canals instrumented, Cavit temp placed...",
+            placeholder="e.g. Tooth #46, vital cold test negative, pre-op PA taken, 3 canals instrumented, Cavit temp placed...",
             height=110
         )
         
