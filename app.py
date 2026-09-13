@@ -334,6 +334,31 @@ You are provided with:
 You MUST reference these sources to output exact 9-digit SBS codes, 7-digit ACHI codes, [Block] numbers, statutory SAR prices, and ICD-10-AM diagnoses.
 
 ================================================================================
+CRITICAL RULE: NPHIES PRIOR-AUTHORIZATION (PA) DETERMINATION MATRIX
+================================================================================
+Evaluate billable procedures against official CCHI / NPHIES clearinghouse authorization tiers:
+
+1. TIER 1: MANDATORY PRIOR AUTHORIZATION (Pre-Treatment Approval Required):
+   - Fixed Prosthodontics: Single Crowns [Block 470], Bridges / Retainers [Block 471].
+   - Removable Prosthodontics: Complete Dentures [Block 474], Cast Partial Dentures [Block 474].
+   - Implantology: Fixture Placement [Block 400], Custom/Prefab Abutments & Crowns [Block 473].
+   - Surgical Interventions: Impacted Tooth Surgical Extractions [Block 458], Periodontal Flap / Crown Lengthening [Block 456].
+   - Orthodontics: Interceptive / Comprehensive Appliances [Blocks 480–483].
+   * MANDATORY AUDIT REQUIREMENT: Must state required pre-operative radiograph (PA / Panoramic / CBCT) and clinical justification demonstrating restorability.
+
+2. TIER 2: PA EXEMPT (Clean Direct Submission / Routine Encounters):
+   - Oral Examinations & Consultations [Block 450].
+   - Diagnostic Radiographs (PA, Bitewing, OPG) [Block 451].
+   - Direct Restorations (Amalgam, Composite, GIC) [Blocks 460, 461].
+   - Routine Non-Surgical Extractions [Block 457].
+   - Prophylaxis & Scaling [Block 454].
+   - Dental Emergency Relief of Pain [Block 484].
+
+3. TIER 3: MULTI-VISIT ENDODONTICS (CONDITIONAL / STAGED):
+   - Stage 1 (Pulpectomy / Emergency extirpation 97415-00-10): PA Exempt under acute pain protocol.
+   - Stage 2 (Definitive Obturation 97417-00-10): Adjudicated under established episode authorization with post-operative PA radiograph verification.
+
+================================================================================
 CRITICAL RULE: ARTICLE 11 STATUTORY TARIFF ACCURACY
 ================================================================================
 1. TARIFF PRICE ENFORCEMENT:
@@ -420,7 +445,12 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
     if inc_checklist:
         instructions.append(f"""
 {sec_num}. CLINICIAN'S RAPID PRE-FLIGHT CHECKLIST (CCHI / NPHIES)
-   - Single-line checks: Anatomical Site, Required Radiograph, Clinical Justification, Prior Authorization/Episode Status, #1 Denial Trap.
+   - Single-line concise audit checks:
+     * **Anatomical Site Verification:** [FDI tooth number / Quadrant / Arch].
+     * **NPHIES Prior-Authorization (PA) Tier:** [MANDATORY (Pre-treatment approval required) / EXEMPT (Direct submission) / CONDITIONAL (Episode linked)].
+     * **Mandatory Diagnostic Attachments:** [Pre-op PA / OPG / Clinical Photo / Periodontal Charting / None required].
+     * **Clinical Justification Sentence:** [Concise 1-line justification satisfying medical necessity for clearinghouse audit].
+     * **#1 Technical Denial Trap:** [The exact compliance mistake that causes rejection for this specific procedure].
 """)
         sec_num += 1
 
@@ -450,7 +480,6 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 def generate_scrubbed_package(client, doctor_input, cchi_text, icd_db, tariff_map, system_instruction):
     icd_reference = "\n".join([f"- {item['code']}: {item['title']} ({item['category']})" for item in icd_db]) if icd_db else "[Built-in ICD-10-AM Active]"
 
-    # Pass key tariff entries relevant to the input context
     tariff_sample = []
     if tariff_map:
         for k, v in list(tariff_map.items())[:120]:
