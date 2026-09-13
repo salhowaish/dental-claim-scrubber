@@ -22,14 +22,12 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
-    /* Enforce Dark Canvas Across All Devices & OS Themes */
     html, body, .stApp {
         background-color: #0B0F19 !important;
         color: #F8FAFC !important;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
-    /* Top Bar & Header Structure */
     .brand-header {
         margin-bottom: 1.25rem;
         padding-bottom: 1rem;
@@ -71,7 +69,6 @@ st.markdown("""
         margin-top: 0.4rem;
     }
     
-    /* Tag Pills */
     .tag-container {
         display: flex;
         flex-wrap: wrap;
@@ -95,7 +92,6 @@ st.markdown("""
         border: 1px solid rgba(245, 158, 11, 0.25);
     }
     
-    /* Executive Profile Card (Sidebar) */
     .profile-card {
         background: rgba(30, 41, 59, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -132,11 +128,7 @@ st.markdown("""
         color: #38BDF8 !important;
         text-decoration: none;
     }
-    .profile-contact a:hover {
-        text-decoration: underline;
-    }
     
-    /* Typography & Section Titles */
     .sub-section-title {
         font-size: 0.72rem;
         font-weight: 700;
@@ -147,7 +139,6 @@ st.markdown("""
         margin-bottom: 0.4rem;
     }
     
-    /* Input Form Fields */
     .stTextArea textarea {
         background-color: #161F30 !important;
         color: #F8FAFC !important;
@@ -160,7 +151,6 @@ st.markdown("""
         color: #64748B !important;
     }
     
-    /* Button Controls */
     div.stButton > button:first-child {
         border-radius: 6px;
         font-weight: 600;
@@ -169,7 +159,6 @@ st.markdown("""
         padding: 0.55rem 1.2rem;
     }
 
-    /* Mobile Adaptations */
     @media (max-width: 768px) {
         .brand-top-row {
             flex-direction: column;
@@ -194,7 +183,7 @@ st.markdown("""
 # ==========================================
 @st.cache_data(show_spinner=False)
 def load_cchi_regulatory_databases():
-    # 1. Load SBS Procedure Index (PDF)
+    # 1. SBS Procedure Index (PDF)
     pdf_text = ""
     pdf_filename = "sbs_dental_index.pdf"
     if os.path.exists(pdf_filename):
@@ -208,7 +197,7 @@ def load_cchi_regulatory_databases():
         except Exception:
             pdf_text = ""
 
-    # 2. Load ICD-10-AM Diagnostic Ground Truth (JSON)
+    # 2. ICD-10-AM Diagnostic Ground Truth (JSON)
     icd_list = []
     json_filename = "cchi_dental_icd10.json"
     if os.path.exists(json_filename):
@@ -218,8 +207,8 @@ def load_cchi_regulatory_databases():
         except Exception:
             icd_list = []
 
-    # 3. Load & Auto-Sanitize Article 11 Tariffs (CSV)
-    tariff_map = {}
+    # 3. Complete Article 11 Statutory Tariff Schedule (All 712 Procedures)
+    tariff_entries = []
     csv_filename = "cchi_article11_tariffs.csv"
     if os.path.exists(csv_filename):
         try:
@@ -232,39 +221,20 @@ def load_cchi_regulatory_databases():
                     df[col] = df[col].astype(str).str.replace(r'[\r\n]+', '', regex=True).str.strip()
             
             for _, row in df.iterrows():
-                hyphen_code = str(row.get("SBS code -Hyphenated", "")).strip()
-                sbs_raw = row.get("SBSCode")
-                sbs_num = ""
-                if pd.notna(sbs_raw):
-                    try:
-                        sbs_num = str(int(float(sbs_raw))).zfill(9)
-                    except Exception:
-                        sbs_num = str(sbs_raw).strip()
-                
-                block_val = str(row.get("Block", "")).strip()
-                if block_val.endswith(".0"):
-                    block_val = block_val[:-2]
-
-                entry = {
-                    "sbs_hyphen": hyphen_code,
-                    "sbs_code": sbs_num,
-                    "price": str(row.get("Price", "")).strip(),
-                    "short_desc": str(row.get("Short Description", "")).strip(),
-                    "long_desc": str(row.get("Long Description", "")).strip(),
-                    "block": block_val,
-                    "specialty": str(row.get("Department/ Specialty", "")).strip()
-                }
-                
-                if hyphen_code:
-                    tariff_map[hyphen_code] = entry
-                if sbs_num:
-                    tariff_map[sbs_num] = entry
+                hyphen = str(row.get("SBS code -Hyphenated", "")).strip()
+                block = str(row.get("Block", "")).split(".")[0].strip()
+                desc = str(row.get("Short Description", "")).strip()
+                price = str(row.get("Price", "")).strip()
+                spec = str(row.get("Department/ Specialty", "")).strip()
+                if hyphen:
+                    tariff_entries.append(f"{hyphen} [Block {block}] ({spec}) {desc} -> SAR {price}")
         except Exception:
-            tariff_map = {}
+            tariff_entries = []
 
-    return pdf_text, icd_list, tariff_map
+    tariff_text = "\n".join(tariff_entries) if tariff_entries else "[Article 11 Built-in Tariffs Active]"
+    return pdf_text, icd_list, tariff_text
 
-cchi_index_text, cchi_icd_db, cchi_tariff_map = load_cchi_regulatory_databases()
+cchi_index_text, cchi_icd_db, cchi_tariff_reference = load_cchi_regulatory_databases()
 
 # ==========================================
 # SIDEBAR: EXECUTIVE ARCHITECT & CREDENTIALS
@@ -289,10 +259,10 @@ with st.sidebar:
     st.markdown('<div class="sub-section-title">Clinical & Regulatory Qualifications</div>', unsafe_allow_html=True)
     st.markdown("""
     * **SB-Pros** | Saudi Board in Prosthodontics  
-    * **MSc** | Executive Master in Health Insurance (KSU)  
+    * **MSc** | Executive Master in Insurance (KSU)  
     * **BDS** | Bachelor of Dental Surgery  
     * **CPC®** | Certified Professional Coder (AAPC)  
-    * **IBM AI** | Professional Certificate in Artificial Intelligence
+    * **IBM SkillsBuild** | AI in Healthcare (3Q-2026-ET)
     """)
 
     api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.text_input("Gemini API Key", type="password")
@@ -326,77 +296,62 @@ st.markdown("""
 # ==========================================
 BASE_PRINCIPLES = """
 You are an expert Certified Professional Coder (CPC) and Dental Revenue Cycle Documentation Auditor in Saudi Arabia.
-You are provided with:
-1. The full text of the official CCHI Saudi Billing System (SBS) Version 3 Dental Alphabetic Index.
-2. The official ICD-10-AM Dental Diagnostic Ground Truth Concept Table.
-3. The official Article 11 Statutory Government Sector Dental Price Schedule.
+You are grounded in:
+1. The official CCHI Saudi Billing System (SBS) Version 3 Dental Alphabetic Index (Attached Ground Truth).
+2. The official ICD-10-AM Dental Diagnostic Ground Truth Concept Table (Attached Ground Truth).
+3. The official CCHI Article 11 Statutory Government Dental Tariff Schedule covering ALL 712 procedures.
+4. CCHI Pre-Approval Policy and NPHIES Adjudication Standards.
 
 You MUST reference these sources to output exact 9-digit SBS codes, 7-digit ACHI codes, [Block] numbers, statutory SAR prices, and ICD-10-AM diagnoses.
 
 ================================================================================
-CRITICAL RULE: NPHIES PRIOR-AUTHORIZATION (PA) DETERMINATION MATRIX
+CRITICAL REGULATION: NPHIES PRIOR-AUTHORIZATION (PA) & THE 500 SAR RULE
 ================================================================================
-Evaluate billable procedures against official CCHI / NPHIES clearinghouse authorization tiers:
+1. THE MANDATORY 500 SAR EXEMPTION RULE (CCHI Pre-Approval Policy, Chapter 4, Sec 2):
+   - Outpatient dental treatment is STRICTLY EXCLUDED from prior authorization if the cost of the one-time treatment is LESS THAN 500 SAR.
+   - LEVEL 1 NPHIES VIOLATION ALERT: Submitting a prior authorization request for a service below 500 SAR is an official NPHIES violation. DO NOT flag services under 500 SAR (such as exams, radiographs, simple extractions, or minor direct restorations) as PA Mandatory.
+   - State clearly: `[PA EXEMPT: Clean Direct Submission (Service < 500 SAR Threshold)]`.
 
-1. TIER 1: MANDATORY PRIOR AUTHORIZATION (Pre-Treatment Approval Required):
-   - Fixed Prosthodontics: Single Crowns [Block 470], Bridges / Retainers [Block 471].
-   - Removable Prosthodontics: Complete Dentures [Block 474], Cast Partial Dentures [Block 474].
-   - Implantology: Fixture Placement [Block 400], Custom/Prefab Abutments & Crowns [Block 473].
-   - Surgical Interventions: Impacted Tooth Surgical Extractions [Block 458], Periodontal Flap / Crown Lengthening [Block 456].
-   - Orthodontics: Interceptive / Comprehensive Appliances [Blocks 480–483].
-   * MANDATORY AUDIT REQUIREMENT: Must state required pre-operative radiograph (PA / Panoramic / CBCT) and clinical justification demonstrating restorability.
+2. MANDATORY PRIOR AUTHORIZATION (Services >= 500 SAR & Major Interventions):
+   - Services >= 500 SAR (e.g. Indirect Crowns [Block 470], Bridges [Block 471], Dentures [Block 474], Implants [Block 400], Root Canal Completion [Block 462], Surgical Extractions [Block 458]) require prior approval before initiation.
+   - STATUTORY SLA: The insurer must respond within 60 minutes. If the insurer delays beyond 60 minutes, the service is legally DEEMED APPROVED under Chapter 5 of the CCHI policy.
+   - REJECTION SAFEGUARD: Rejections can only be issued by a Senior Specialist (أخصائي أول) in the SAME clinical dental specialty.
 
-2. TIER 2: PA EXEMPT (Clean Direct Submission / Routine Encounters):
-   - Oral Examinations & Consultations [Block 450].
-   - Diagnostic Radiographs (PA, Bitewing, OPG) [Block 451].
-   - Direct Restorations (Amalgam, Composite, GIC) [Blocks 460, 461].
-   - Routine Non-Surgical Extractions [Block 457].
-   - Prophylaxis & Scaling [Block 454].
-   - Dental Emergency Relief of Pain [Block 484].
+3. EMERGENCY & ACUTE PAIN EXEMPTION:
+   - Triage levels 1, 2, 3 and emergency acute pain procedures (such as Emergency Pulp Extirpation 97419-00-10) are PA-EXEMPT under the 24-hour insurer notification rule.
 
-3. TIER 3: MULTI-VISIT ENDODONTICS (CONDITIONAL / STAGED):
-   - Stage 1 (Pulpectomy / Emergency extirpation 97415-00-10): PA Exempt under acute pain protocol.
-   - Stage 2 (Definitive Obturation 97417-00-10): Adjudicated under established episode authorization with post-operative PA radiograph verification.
+================================================================================
+CRITICAL SBSCS DENTAL CODING STANDARDS (SBSCS 4000 - 4092)
+================================================================================
+1. ANATOMICAL IDENTIFIERS: Mandatory FDI 2-digit tooth numbering (Permanent 11-48, Primary 51-85).
+2. ENDODONTICS (SBSCS 4042):
+   - Completed RCT is billed as ONE single SBS code per tooth: 97420-01-00 (anterior), 97420-02-00 (premolar), 97420-03-00 (molar). This code inherently includes extirpation, chemomechanical preparation, and obturation.
+   - Emergency or palliative visit is billed as 97419-00-10.
+   - Mandatory Diagnosis: K04.0 (Pulpitis). K02.5 (Caries with pulp exposure) is prohibited unless pulp was exposed during caries removal and vitality tests ruled out irreversible pulpitis.
+3. REMOVABLE PROSTHODONTICS (SBSCS 4060):
+   - Intermediate fabrication steps (primary impression 97719-01-10, border molding 97719-01-20, final impression 97719-01-30, facebow transfer 97719-01-40, bite registration 97719-01-50, try-in 97719-01-60, prep for crown/FPD 97719-01-80) are STATUTORY NON-BILLABLE items solely for clinical documentation. Tariff MUST BE 0.00 SAR with flag [IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE].
+   - Only definitive delivery / insertion (97719-01-70 / 97719-00-00) unlocks the full Article 11 tariff (e.g. 8,000 SAR).
+4. RESTORATIVE (SBSCS 4030):
+   - Caries excavation, etching, bonding, and restoration are all bundled into the composite/amalgam code (97521-xx / 97511-xx).
+5. LOCAL ANESTHESIA (SBSCS 4010 & 3012):
+   - Infiltration (92513-xx-00 [1909]) or Nerve Block (92509-xx-10 [1909]) with ASA status extension (e.g., ASA 99).
 
 ================================================================================
 CRITICAL RULE: ARTICLE 11 STATUTORY TARIFF ACCURACY
 ================================================================================
-1. TARIFF PRICE ENFORCEMENT:
-   - For all billable dental procedures, retrieve the exact statutory price from the Article 11 Tariff ground truth.
-   - If an intermediate stage or component is listed as "part of main service and / or follow ups", or is part of an uncompleted multi-visit fabrication, its current encounter tariff MUST BE "0.00 SAR" with Claim Action Flag [IN-PROGRESS / BUNDLED ENCOUNTER - NON-BILLABLE].
-   - When billing the definitive completed procedure (e.g. Denture Insertion 97719-01-70, Crown delivery, completed RCT), apply the full Article 11 statutory tariff.
-
-================================================================================
-CRITICAL RULE: ICD-10-AM SPECIFICITY & DIAGNOSTIC IMMUTABILITY
-================================================================================
-1. STRICT ADHERENCE TO GROUND TRUTH TABLE:
-   - Select diagnostic codes strictly from the provided ICD-10-AM Concept Table.
-   - Caries: K02.0, K02.1, K02.2, K02.3, K02.5.
-   - Pulpal / Periapical: K04.0, K04.1, K04.2, K04.4, K04.5, K04.6, K04.7.
-   - Periodontal: K05.1, K05.3.
-   - Edentulism / Loss of teeth: K08.1.
-   - Failures / Fractures: K08.81 (Pathological fracture of tooth), K08.88 (Other specified disorders).
-   - Status: Z01.2 (Dental examination), Z96.5 (Presence of tooth-root and mandibular implants), Z97.2 (Presence of dental prosthetic device).
-   - Trauma: S02.5 (Fracture of tooth), S03.2 (Dislocation of tooth).
-
-2. DIAGNOSTIC IMMUTABILITY RULE (ANTI-DRIFT):
-   - If clinician input contains an existing "[PRIMARY_ICD10]" inside an incoming CONTINUITY BLOCK, YOU MUST LOCK AND REPEAT THAT EXACT CODE.
-   - DO NOT alter, generalize, or shift the ICD-10-AM code across follow-up encounters of the same episode.
-
-================================================================================
-UNIVERSAL MULTI-VISIT CONTINUITY & ANTI-UNBUNDLING RULES
-================================================================================
-1. RENDERED VS. PLANNED SCOPE DISCIPLINE:
-   - ONLY bill procedures that were PHYSICALLY EXECUTED during today's encounter.
-   - Services noted as "planned for next visit", "indicated in future", or "pending restorability" MUST NOT appear in the Billable Coding Table for today's encounter.
-   - Diagnostic and Disassembly encounters (Comprehensive Exam 97011-00-00 [450] - 150 SAR, Radiographs [451] - 120 SAR, Crown sectioning 97655-00-00 [462] - 200 SAR) are FULLY BILLABLE fee-for-service events on Day 1.
-
-2. MULTI-STAGE FABRICATION BUNDLING:
-   - Intermediate visits (RPD/CD Visits 1-4, Indirect Crown Visit 1, Multi-visit RCT Stage 1) are non-billable components locked to 0.00 SAR.
-   - Final Delivery / Obturation encounter unlocks the global statutory fee.
-
-3. PREPARATORY EXCEPTIONS & ANATOMICAL MULTIPLICITY:
-   - Post and core (97625-xx [463]) inherently includes the coronal core. NEVER bill core build-up (97627-00-00 [463]) on the same tooth receiving a post.
+Retrieve the EXACT statutory price from the attached Article 11 Tariff Schedule.
+Examples of statutory benchmarks:
+- Comprehensive Oral Exam (97011-00-00): 150 SAR
+- Periodic Oral Exam (97012-00-00): 100 SAR
+- Limited / Problem Exam (97013-00-00): 100 SAR
+- Intraoral PA Radiograph (97022-00-10): 120 SAR
+- Bitewing Radiograph (97022-00-20): 120 SAR
+- Routine Tooth Extraction (97311-01-10): 300 SAR
+- Crown Removal (97655-00-00): 200 SAR
+- Zirconia Crown (97613-02-00): 3,000 SAR
+- Porcelain Fused to Metal Crown (97615-10-00): 2,500 SAR
+- Denture Insertion (97719-01-70): 8,000 SAR
+- Intermediate fabrication steps: 0.00 SAR (Statutory Bundled)
 
 ================================================================================
 CRITICAL FORMATTING MANDATE FOR CASE CONTINUITY BLOCK
@@ -447,10 +402,10 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 {sec_num}. CLINICIAN'S RAPID PRE-FLIGHT CHECKLIST (CCHI / NPHIES)
    - Single-line concise audit checks:
      * **Anatomical Site Verification:** [FDI tooth number / Quadrant / Arch].
-     * **NPHIES Prior-Authorization (PA) Tier:** [MANDATORY (Pre-treatment approval required) / EXEMPT (Direct submission) / CONDITIONAL (Episode linked)].
-     * **Mandatory Diagnostic Attachments:** [Pre-op PA / OPG / Clinical Photo / Periodontal Charting / None required].
-     * **Clinical Justification Sentence:** [Concise 1-line justification satisfying medical necessity for clearinghouse audit].
-     * **#1 Technical Denial Trap:** [The exact compliance mistake that causes rejection for this specific procedure].
+     * **NPHIES Prior-Authorization (PA) Status:** [PA EXEMPT: Service < 500 SAR (Level 1 Violation to request PA) / PA MANDATORY: Service >= 500 SAR (60-min SLA enforced) / PA EXEMPT: Emergency Acute Pain Protocol (24-hr notification)].
+     * **Mandatory Diagnostic Attachments:** [Pre-op PA / OPG / CBCT / Clinical Photo / Periodontal Charting / None required].
+     * **Clinical Justification Sentence:** [Concise 1-line medical necessity statement for clearinghouse audit].
+     * **#1 Technical Denial Trap:** [The exact compliance error that triggers rejection for this specific code].
 """)
         sec_num += 1
 
@@ -462,7 +417,7 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
      **Encounter Specialty:** [Specialty Name]
      **Procedure:** [Definitive Procedure Name]
      **Tooth / Site:** [Tooth FDI #___ / Arch / Quadrant]
-     **Anesthesia:** [None / Infiltration: Specify Agent & Dose]
+     **Anesthesia:** [None / Infiltration: Specify Agent & Dose / Nerve Block]
      **Radiographs:** [None / Pre-op PA / Post-op PA: Specify Finding]
      **Patient Status:** [Cooperative / Mild Sensitivity / Asymptomatic]
      **Clinical Procedure:** [Short factual lines detailing steps performed today].
@@ -477,16 +432,8 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 
     return "".join(instructions)
 
-def generate_scrubbed_package(client, doctor_input, cchi_text, icd_db, tariff_map, system_instruction):
+def generate_scrubbed_package(client, doctor_input, cchi_text, icd_db, tariff_text, system_instruction):
     icd_reference = "\n".join([f"- {item['code']}: {item['title']} ({item['category']})" for item in icd_db]) if icd_db else "[Built-in ICD-10-AM Active]"
-
-    tariff_sample = []
-    if tariff_map:
-        for k, v in list(tariff_map.items())[:120]:
-            tariff_sample.append(f"{v['sbs_hyphen']} ({v['sbs_code']}) | Block {v['block']} | {v['short_desc']} -> SAR {v['price']}")
-        tariff_reference = "\n".join(tariff_sample)
-    else:
-        tariff_reference = "[Article 11 Built-in Tariffs Active]"
 
     prompt_payload = f"""
 OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX (ACHI PROCEDURES GROUND TRUTH):
@@ -495,8 +442,8 @@ OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX (ACHI PROCEDURES GROUND TRUT
 OFFICIAL ICD-10-AM DENTAL DIAGNOSTIC CONCEPT TABLE (MANDATORY DIAGNOSIS GROUND TRUTH):
 {icd_reference}
 
-OFFICIAL CCHI ARTICLE 11 STATUTORY DENTAL TARIFF SCHEDULE:
-{tariff_reference}
+OFFICIAL CCHI ARTICLE 11 STATUTORY GOVERNMENT DENTAL TARIFF SCHEDULE (COMPLETE 712 PROCEDURES):
+{tariff_text}
 
 CLINICIAN ENCOUNTER CASE SUMMARY:
 {doctor_input}
@@ -504,7 +451,7 @@ CLINICIAN ENCOUNTER CASE SUMMARY:
     for attempt in range(2):
         try:
             response = client.models.generate_content(
-                model="gemini-3.7-flash",
+                model="gemini-2.5-flash",
                 contents=prompt_payload,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
@@ -591,10 +538,9 @@ with col_out:
                         inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
                     )
                     raw_result = generate_scrubbed_package(
-                        client, doctor_input, cchi_index_text, cchi_icd_db, cchi_tariff_map, dynamic_sys_instruction
+                        client, doctor_input, cchi_index_text, cchi_icd_db, cchi_tariff_reference, dynamic_sys_instruction
                     )
                     
-                    # Robust Dual-Pattern Token Matcher
                     nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
                     if nphies_match:
                         block_content = nphies_match.group(1).strip()
