@@ -2,9 +2,9 @@ import os
 import re
 import json
 import time
+import sqlite3
 import pandas as pd
 import streamlit as st
-from pypdf import PdfReader
 from google import genai
 from google.genai import types
 
@@ -198,65 +198,102 @@ if "final_scrubbed_output" not in st.session_state:
     st.session_state.final_scrubbed_output = None
 
 # ==========================================
-# CACHED REGULATORY GROUND TRUTH LOADERS
+# BACKEND: REGULATORY ASSET INGESTION & FTS5 RAG
 # ==========================================
 @st.cache_data(show_spinner=False)
-def load_cchi_regulatory_databases():
-    # 1. SBS Procedure Index (PDF)
-    pdf_text = ""
-    pdf_filename = "sbs_dental_index.pdf"
-    if os.path.exists(pdf_filename):
+def load_all_regulatory_assets():
+    # 1. Statutory Article 11 Dental Tariffs (712 Procedures)
+    tariffs = []
+    if os.path.exists("cchi_article11_tariffs.csv"):
         try:
-            reader = PdfReader(pdf_filename)
-            extracted = [
-                f"--- PAGE {i+1} ---\n{p.extract_text()}" 
-                for i, p in enumerate(reader.pages) if p.extract_text()
-            ]
-            pdf_text = "\n".join(extracted)
+            df = pd.read_csv("cchi_article11_tariffs.csv", skiprows=1, encoding="utf-8", encoding_errors="ignore")
+            df = df.dropna(how="all", axis=1).dropna(how="all", axis=0)
+            df.columns = df.columns.str.strip()
+            for _, r in df.iterrows():
+                hyphen = str(r.get("SBS code -Hyphenated", "")).strip()
+                block = str(r.get("Block", "")).split(".")[0].strip()
+                desc = str(r.get("Short Description", "")).strip()
+                price = str(r.get("Price", "")).strip()
+                spec = str(r.get("Department/ Specialty", "")).strip()
+                if hyphen and hyphen != "nan":
+                    tariffs.append(f"{hyphen} [Block {block}] ({spec}) {desc} -> SAR {price}")
         except Exception:
-            pdf_text = ""
+            tariffs = []
 
-    # 2. ICD-10-AM Diagnostic Ground Truth (JSON)
+    # 2. ICD-10-AM Diagnostic Ground Truth
     icd_list = []
-    json_filename = "cchi_dental_icd10.json"
-    if os.path.exists(json_filename):
+    if os.path.exists("cchi_dental_icd10.json"):
         try:
-            with open(json_filename, "r", encoding="utf-8") as f:
+            with open("cchi_dental_icd10.json", "r", encoding="utf-8") as f:
                 icd_list = json.load(f)
         except Exception:
             icd_list = []
 
-    # 3. Complete Article 11 Statutory Tariff Schedule (All 712 Procedures)
-    tariff_entries = []
-    csv_filename = "cchi_article11_tariffs.csv"
-    if os.path.exists(csv_filename):
+    # 3. NPHIES Denial Triggers (86 Rules)
+    denials = []
+    if os.path.exists("nphies_denial_rules.json"):
         try:
-            df = pd.read_csv(csv_filename, skiprows=1, encoding="utf-8", encoding_errors="ignore")
-            df = df.dropna(how="all", axis=1).dropna(how="all", axis=0)
-            df.columns = df.columns.str.strip()
-            
-            for col in df.columns:
-                if df[col].dtype == object:
-                    df[col] = df[col].astype(str).str.replace(r'[\r\n]+', '', regex=True).str.strip()
-            
-            for _, row in df.iterrows():
-                hyphen = str(row.get("SBS code -Hyphenated", "")).strip()
-                block = str(row.get("Block", "")).split(".")[0].strip()
-                desc = str(row.get("Short Description", "")).strip()
-                price = str(row.get("Price", "")).strip()
-                spec = str(row.get("Department/ Specialty", "")).strip()
-                if hyphen:
-                    tariff_entries.append(f"{hyphen} [Block {block}] ({spec}) {desc} -> SAR {price}")
+            with open("nphies_denial_rules.json", "r", encoding="utf-8") as f:
+                drules = json.load(f)
+                denials = [f"- Code {r.get('Code')}: {r.get('Description')}" for r in drules if r.get("Code")]
         except Exception:
-            tariff_entries = []
+            denials = []
 
-    tariff_text = "\n".join(tariff_entries) if tariff_entries else "[Article 11 Built-in Tariffs Active]"
-    return pdf_text, icd_list, tariff_text
+    # 4. Official NPHIES FDI Tooth Surface Syntax
+    surfaces = []
+    if os.path.exists("appendix_fdi_tooth_surface.json"):
+        try:
+            with open("appendix_fdi_tooth_surface.json", "r", encoding="utf-8") as f:
+                srules = json.load(f)
+                surfaces = [f"{r.get('Code', r.get('code'))}: {r.get('Display', r.get('display', ''))}" for r in srules]
+        except Exception:
+            surfaces = ["M: Mesial", "O: Occlusal", "D: Distal", "B: Buccal", "L: Lingual", "P: Palatal", "I: Incisal", "V: Vestibular"]
 
-cchi_index_text, cchi_icd_db, cchi_tariff_reference = load_cchi_regulatory_databases()
+    return (
+        "\n".join(tariffs) if tariffs else "[Article 11 Built-in Tariffs Active]",
+        icd_list,
+        "\n".join(denials) if denials else "[NPHIES 86 Denial Triggers Active]",
+        ", ".join(surfaces)
+    )
+
+tariff_reference, icd_db, nphies_denial_context, fdi_surface_reference = load_all_regulatory_assets()
+
+def query_fts5_rag_knowledge(query_narrative, max_chunks=4):
+    db_path = "ferrule_knowledge.db"
+    if not os.path.exists(db_path):
+        return ""
+    
+    tokens = re.findall(r'[A-Za-z0-9_]{3,}', query_narrative)
+    stopwords = {"patient", "tooth", "teeth", "presented", "under", "with", "dental", "treatment", "procedure", "performed"}
+    valid_tokens = [t for t in tokens if t.lower() not in stopwords]
+    
+    if not valid_tokens:
+        valid_tokens = ["dental", "periodontal", "restoration", "crown", "canal"]
+        
+    fts_match_query = " OR ".join(valid_tokens[:8])
+    
+    snippets = []
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT source_file, page_num, snippet(corpus_fts, 3, '[', ']', '...', 14)
+            FROM corpus_fts
+            WHERE corpus_fts MATCH ?
+            ORDER BY rank LIMIT ?
+        """, (fts_match_query, max_chunks))
+        
+        for sf, pn, snip in cur.fetchall():
+            clean_snip = snip.replace('\n', ' ').strip()
+            snippets.append(f"• [{sf} | Page {pn}]: {clean_snip}")
+        conn.close()
+    except Exception:
+        snippets = []
+        
+    return "\n".join(snippets) if snippets else ""
 
 # ==========================================
-# SIDEBAR: EXECUTIVE ARCHITECT & CREDENTIALS
+# SIDEBAR: EXECUTIVE PROFILE
 # ==========================================
 with st.sidebar:
     st.markdown("""
@@ -289,9 +326,31 @@ with st.sidebar:
         st.caption("Store `GEMINI_API_KEY` in Streamlit Secrets for unauthenticated sessions.")
 
 # ==========================================
+# MAIN INTERFACE HEADER
+# ==========================================
+st.markdown("""
+<div class="brand-header">
+    <div class="brand-top-row">
+        <div class="brand-title-group">
+            <h1 class="brand-title">FERRULE</h1>
+            <span class="brand-author">by Dr. Sulaiman Alhowaish</span>
+        </div>
+        <div class="tag-container">
+            <span class="tag-pill">SBS v3.0</span>
+            <span class="tag-pill">ACHI 10th Ed</span>
+            <span class="tag-pill-gold">NPHIES Core</span>
+        </div>
+    </div>
+    <div class="brand-subtitle">
+        Autonomous Clinical Documentation & NPHIES SBS v3.0 Revenue Assurance Engine
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ==========================================
 # PROMPT LOGIC & REGULATORY PRINCIPLES
 # ==========================================
-BASE_PRINCIPLES = """
+BASE_PRINCIPLES = f"""
 You are an expert Certified Professional Coder (CPC), Dental Revenue Cycle Auditor, and Clinical Documentation Improvement (CDI) Specialist in Saudi Arabia.
 Your objective is PROACTIVE DENIAL PREVENTION, STATUTORY ARTICLE 11 REVENUE ASSURANCE, and CLINICAL DOCUMENTATION STANDARDIZATION across all dental specialties.
 
@@ -300,95 +359,50 @@ You are grounded in:
 2. Official SBS Coding Standards (SBSCS v3.0, October 2025).
 3. Official ICD-10-AM Dental Diagnostic Ground Truth Concept Table (Chapter XI, Trauma, Status).
 4. Official Article 11 Statutory Government Sector Dental Tariff Schedule (712 Procedures).
-5. CCHI Pre-Approval Policies and NPHIES Clearinghouse Adjudication Standards.
+5. CCHI Pre-Approval Policies, CHI Implementing Regulations, and NPHIES Adjudication Standards.
 
 ================================================================================
-1. CCHI / NPHIES PRIOR-AUTHORIZATION (PA) RULES & THE 500 SAR THRESHOLD
+1. DUAL TAXONOMY & ENCOUNTER ROUTING MANDATE (NPHIES COMPLIANCE)
+================================================================================
+- OUTPATIENT DENTAL CARE: Billed using the Australian Schedule of Dental Services and Glossary (ADA item numbers mapped to SBS v3.0 `97xxx-xx-xx` format).
+- INPATIENT / OPERATING ROOM / MAXILLOFACIAL CARE: Billed using ICD-10-AM Diagnosis + 7-digit ACHI 10th Edition procedure codes.
+- TOOTH NOTATION: Strictly mandatory FDI two-digit numbering (Permanent 11-48, Deciduous 51-85).
+- TOOTH SURFACES: Strictly validate against NPHIES Codeable Concepts: {fdi_surface_reference}. Multi-surface restorations MUST be billed as ONE multi-surface code, never separated.
+
+================================================================================
+2. CCHI / NPHIES PRIOR-AUTHORIZATION (PA) RULES & THE 500 SAR THRESHOLD
 ================================================================================
 - MANDATORY 500 SAR EXEMPTION (CCHI Pre-Approval Policy, Chap. 4, Sec. 2):
   Any outpatient dental service where the one-time treatment is LESS THAN 500 SAR is STRICTLY EXEMPT from Prior Authorization.
-  * LEVEL 1 NPHIES VIOLATION ALERT: Requesting PA for services < 500 SAR (e.g. routine exams, radiographs, simple extractions, minor fillings) is an official violation. Mark these strictly as:
+  * LEVEL 1 NPHIES VIOLATION ALERT: Requesting PA for services < 500 SAR is an official violation. Mark these strictly as:
     [PA EXEMPT: Clean Direct Claim (Service < 500 SAR Threshold)].
 - PA MANDATORY (Services >= 500 SAR & Major Interventions):
   Indirect crowns [Block 470], bridges [Block 471], dentures [Block 474], implants [Block 400], completed RCT [Block 462], surgical extractions [Block 458], and periodontal surgery [Block 456] require pre-approval.
   * STATUTORY 60-MIN SLA: Insurers must adjudicate requests within 60 minutes. If delayed beyond 60 minutes, the service is legally DEEMED APPROVED under Chapter 5.
   * REJECTION SAFEGUARD: Rejections can only be issued by a Senior Specialist (أخصائي أول) in the same clinical specialty.
-- EMERGENCY & ACUTE PAIN: Triage levels 1-3 and emergency pulp extirpation (97419-00-10) are PA-EXEMPT under the 24-hour notification rule.
+- TIMELY FILING DEADLINES (CHI Implementing Regulations, Article 90):
+  * Private sector claims: must be submitted within 30 days of service.
+  * Government sector / Health Clusters: must be submitted within 45 days of service.
+  * Insurer settlement deadline: 30 days from receipt.
+  * Re-submission turnaround for rejected claims: strictly 15 days.
 
 ================================================================================
-2. OFFICIAL SBSCS DENTAL CODING & BUNDLING STANDARDS (SBSCS 4000 - 4092)
+3. OFFICIAL SBSCS DENTAL CODING & BUNDLING STANDARDS (SBSCS 4000 - 4092)
 ================================================================================
-- ANATOMICAL SITE: Tooth number(s) must be recorded using the FDI two-digit numbering system (Permanent 11-48, Primary 51-85).
-- CONDITION ONSET FLAG (COF): Report COF = 2 (Present upon presentation) for pre-existing conditions; COF = 1 for conditions arising during the episode.
-- LOCAL ANESTHESIA (SBSCS 3012 & 4010):
-  * For non-admitted care, anesthesia IS coded using SBS codes with a 2-character ASA extension: Infiltration 92513-xx-00 [1909] or Trigeminal Nerve Block 92509-xx-10 [1909] (default: ASA 99 if unstated).
-  * In the Billable Table, list local anesthesia with Claim Action Flag: [CODED COMPONENT - INCLUDED IN CLINICAL VISIT] (Govt Article 11 Tariff applies if billed in specialized surgery).
-- RESTORATIVE (SBSCS 4030):
-  * Direct restorations are coded by material and surface add-on model:
-    - 1 surface: 97521-01-10 [466] (adhesive) or 97511-01-10 [465] (metallic).
-    - Additional surfaces: 97521-02-00 [466] or 97511-02-00 [465] multiplied by (Total Surfaces - 1).
-  * Contiguous surfaces on the same tooth (e.g. MO) must be billed as ONE multi-surface restoration, NEVER two separate 1-surface restorations.
-  * Routine steps (rubber dam, isolation, liners/bases, etch, bond, matrix, polishing) are bundled and non-billable.
-- ENDODONTICS (SBSCS 4042):
-  * Completed RCT is billed as ONE code per tooth based on tooth type: Anterior (97420-01-00), Premolar (97420-02-00), Molar (97420-03-00). Inherently includes extirpation, instrumentation, and obturation.
-  * Emergency/palliative pulpectomy is 97419-00-10 (SAR 1,500). NEVER bill 97419-00-10 concurrently on the same day as completed RCT (97420-xx).
-  * Primary Diagnosis must be K04.0 (Pulpitis). K02.5 (Caries with pulp exposure) is prohibited unless pulp was exposed during caries removal and irreversible pulpitis was clinically excluded.
-- ORAL SURGERY (SBSCS 4010 & Article 11):
-  * Routine extraction: 97311-01-10 [457] (SAR 300).
-  * Surgical removal of tooth (soft tissue): 97321-05-00 [458] (SAR 800).
-  * Surgical removal of impacted tooth (partial bony): 97321-01-00 [458] (SAR 1,500).
-  * Surgical removal of impacted tooth (complete bony): 97321-02-00 [458] (SAR 1,500).
-  * Note: 97322-09/10 is reserved exclusively for Full Upper/Lower Dental Clearance (SAR 3,000).
-  * Flap elevation, debridement, bone contouring, and suturing are bundled into surgical extraction. Under SBSCS 4091, soft tissue wound repair codes (30032/30035 [1635]) must NEVER be used for closure of dental surgical incisions.
-- PERIODONTICS & REGENERATION (SBSCS 4020 & 4021):
-  * STATUTORY FLAP RULE (SBSCS 4021 Rule 1): Tissue regeneration does NOT include flap entry and closure, and SHALL be coded separately when documented.
-    - Code 97271-01-00 [456] Open flap or curettage surgery; per tooth or implant (SAR 1,000.00), OR 97232-00-10 [456] Periodontal flap procedure, per quadrant (SAR 1,000.00).
-  * REGENERATIVE & MEMBRANE RULES (SBSCS 4021 Rule 2):
-    - Bone graft, natural: 97244-00-00 [456] (SAR 2,000.00).
-    - Guided tissue regeneration / resorbable membrane: If documented, a separate code SHALL be assigned for resorbable barrier membrane placement: 97236-00-00 [456] Guided tissue regeneration (SAR 1,500.00).
-  * MEDICAL NECESSITY THRESHOLD: Quadrant SRP (97222-00-10) and surgical access require documented clinical probing depth >= 4mm, bleeding on probing (BOP), and prior failure of conservative therapy.
-- PROSTHODONTICS (SBSCS 4060):
-  * Removable denture fabrication steps (97719-01-10 through 97719-01-60 and 97719-01-80) are STATUTORY NON-BILLABLE items for documentation only (0.00 SAR, [IN-PROGRESS / BUNDLED ENCOUNTER]).
-  * Full denture insertion (97719-01-70 / 97719-00-00) unlocks the global statutory fee (SAR 8,000).
-  * Post & Core (97625-xx): Includes core build-up. Never bill separate core build-up (97627-00-10 / 97575-00-10) on the same tooth receiving a post.
-- ORTHODONTICS (SBSCS 4080 & 4081):
-  * COMPREHENSIVE ORTHO EXAM BUNDLING MANDATE (SBSCS 4080):
-    Code 97011-00-20 [450] Comprehensive oral examination for orthodontic treatment (SAR 500.00) INHERENTLY INCLUDES:
-    1. Intraoral photographic records (97072-xx)
-    2. Extraoral photographic records (97073-xx)
-    3. Orthopantomography / OPG (57960-00-00 / 57933-xx)
-    4. Cephalometry / lateral cephalometric radiography (57902-xx)
-    5. Cephalometric tracing, Steiner analysis, or pantographic tracing (97081-xx, 97083-xx)
-    6. Preparation of dental diagnostic cast or 3D digital study models (97071-xx)
-    7. Radiographs.
-  * STRICT ANTI-UNBUNDLING RULE: Under SBSCS 4080 Rule 1, NONE of the above diagnostic records may be assigned a separate billable code or fee when 97011-00-20 is billed. They MUST appear only as non-billable bundled elements (SAR 0.00).
+- Crown Lengthening (97238-00-00 [456]): Strictly EXCLUDES and CANNOT be billed concurrently with routine periodontal flap surgery (97232-xx). Cite Tabular List Page 167 exclusion.
+- Endodontics (SBSCS 4042): Completed RCT is billed as ONE code per tooth based on type (Molar 97420-03-00, Premolar 97420-02-00, Anterior 97420-01-00). Inherently bundles extirpation, instrumentation, and obturation. NEVER bill emergency pulpectomy (97419-00-10) concurrently on the same day. Requires pre-op radiograph.
+- Prosthodontics (SBSCS 4060): Denture fabrication stages (97719-01-10 through 97719-01-60) are non-billable (0.00 SAR). Full denture insertion (97719-01-70 / 97719-00-00) unlocks the global statutory fee (SAR 8,000). Post & core (97625-xx) includes core build-up; do not bill separate core build-up.
+- Orthodontics (SBSCS 4080): Comprehensive exam (97011-00-20, SAR 500) inherently includes intra/extraoral photos, OPG, ceph, tracings, and study models. Separate billing is strictly prohibited.
+- Periodontal Surgery (SBSCS 4021): Flap entry and closure are coded separately from tissue regeneration. Bone graft (97244-00-00, SAR 2,000); GTR membrane (97236-00-00, SAR 1,500). Medical necessity requires documented probing depth >= 4mm and BOP.
 
 ================================================================================
-3. ARTICLE 11 STATUTORY GOVERNMENT TARIFF PRICING
+4. NPHIES CLEARINGHOUSE DENIAL PROTECTION RULES
 ================================================================================
-Output the exact statutory tariff from the attached Article 11 schedule.
-Key Reference Benchmarks:
-- Comprehensive Oral Exam (97011-00-00): 150 SAR
-- Periodic Oral Exam (97012-00-00): 100 SAR
-- Limited / Emergency Oral Exam (97013-00-00 / 97915-00-10): 100 SAR
-- Comprehensive Orthodontic Exam (97011-00-20): 500 SAR
-- Intraoral PA Radiograph (97022-00-10): 120 SAR
-- Bitewing Radiograph (97022-00-20): 120 SAR
-- Routine Tooth Extraction (97311-01-10): 300 SAR
-- Crown Sectioning & Removal (97655-00-00): 200 SAR
-- Post Removal (97452-00-00): 350 SAR
-- Emergency Extirpation (97419-00-10): 1,500 SAR
-- Completed RCT (Molar 97420-03-00 / Premolar 97420-02-00 / Anterior 97420-01-00): 1,500 SAR
-- Monolithic Zirconia Crown (97613-02-00): 3,000 SAR
-- Porcelain Fused to Metal Crown (97615-10-00): 2,500 SAR
-- Complete Denture Insertion (97719-01-70): 8,000 SAR
-- One-Stage Implant Fixture (45846-00-00): 4,000 SAR
-- Open Flap / Curettage Surgery, per tooth/implant (97271-01-00): 1,000 SAR
-- Periodontal Bone Graft, Natural (97244-00-00): 2,000 SAR
-- Guided Tissue Regeneration (97236-00-00): 1,500 SAR
+Proactively guard the claim against these active NPHIES denial triggers:
+{nphies_denial_context}
 
 ================================================================================
-4. CASE CONTINUITY METADATA BLOCK MANDATE
+5. CASE CONTINUITY METADATA BLOCK MANDATE
 ================================================================================
 Enclose strictly between <NPHIES_BLOCK> and </NPHIES_BLOCK> tags at the very end:
 <NPHIES_BLOCK>
@@ -404,35 +418,27 @@ Enclose strictly between <NPHIES_BLOCK> and </NPHIES_BLOCK> tags at the very end
 
 DISCOVERY_EVALUATOR_PROMPT = """
 You are an expert Dental Clinical Documentation Specialist and Revenue Cycle Auditor in Saudi Arabia.
-Your task is to analyze a clinician's preliminary case notes and determine whether critical data points required by CCHI, NPHIES, and Saudi Billing System Coding Standards (SBSCS v3.0) are missing or ambiguous.
+Analyze the clinician's case note and determine whether critical data points required by CCHI, NPHIES, and SBSCS v3.0 are missing or ambiguous.
 
-CRITICAL CLINICAL & REGULATORY CHECKS:
-1. Anatomical Site: Is an exact FDI two-digit tooth number (11-48, 51-85) or specific quadrant/arch clearly specified?
-2. Diagnostic Specificity: Is the pulpal/periapical status, caries depth, tooth wear, or edentulous condition precise?
-3. Objective Radiography: Are the required pre-op, working length, or post-op radiographs explicitly mentioned?
-4. Procedural Mechanics:
-   - For restorations: Are specific surfaces (O, MO, MOD, etc.) and materials clear?
-   - For RCT: Is it emergency extirpation vs. definitive obturation? Canals identified?
-   - For crowns: Is it preparation/provisional vs. definitive delivery?
-   - For surgery/implants: Are torque, flap details, or bone levels noted?
-   - For orthodontics: Is it diagnostic workup (SBSCS 4080) vs. active appliance therapy?
-   - For periodontics: Are probing depths (>= 4mm), BOP, and bone loss documented?
-5. Anesthesia & Isolation: Are local anesthesia (infiltration/block) and rubber dam isolation documented?
+CRITICAL CHECKS:
+1. Anatomical Site: Exact FDI tooth number (11-48, 51-85) or quadrant/arch specified?
+2. Diagnostic Specificity: Pulpal/periapical status, caries depth, tooth wear, or edentulous condition?
+3. Radiographs: Pre-op, working length, or post-op radiograph attachments documented?
+4. Mechanics: Specific surfaces for fillings (M, O, D, B, L/P), crown prep vs delivery, implant torque/bone level?
+5. Anesthesia & Isolation: Documented?
 
 OUTPUT FORMAT:
-- If the case is thoroughly detailed and ready for instant audit without ambiguity, respond with EXACTLY:
-  `[READY_TO_AUDIT]`
-- If critical information is missing, ambiguous, or incomplete, DO NOT generate the final audit. Instead, output:
+- If ready: Respond with EXACTLY `[READY_TO_AUDIT]`.
+- If incomplete:
   ### 📋 Interactive Intake Assessment
-  Provide a brief 1-2 sentence evaluation of the case clarity.
-
+  (1-2 sentence evaluation)
   ### ❓ Clinician Clarification Checklist:
-  Provide 3 to 5 concise, actionable clinical questions to help the clinician supply the missing facts. For each question, offer quick-select hints or examples (e.g. *Tooth #46?*, *Infiltration vs. ID Block?*, *Surfaces: MOD?*, *Pre-op PA taken?*).
+  (3-5 concise, actionable questions with quick examples)
 """
 
 SUPPORTED_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash"]
 
-def call_gemini_with_fallback(client, prompt, system_instruction, temperature):
+def call_gemini_resilient(client, prompt, system_instruction, temperature):
     last_err = None
     for model_id in SUPPORTED_MODELS:
         for attempt in range(2):
@@ -449,14 +455,14 @@ def call_gemini_with_fallback(client, prompt, system_instruction, temperature):
             except Exception as e:
                 last_err = e
                 err_str = str(e).lower()
-                if "404" in err_str or "not_found" in err_str or "not available" in err_str:
+                if "404" in err_str or "not_found" in err_str or "not supported" in err_str:
                     break
                 time.sleep(1)
     raise last_err
 
 def evaluate_encounter_completeness(client, doctor_input):
     prompt = f"CLINICIAN ENCOUNTER ENTRY:\n{doctor_input}"
-    return call_gemini_with_fallback(
+    return call_gemini_resilient(
         client=client,
         prompt=prompt,
         system_instruction=DISCOVERY_EVALUATOR_PROMPT,
@@ -500,7 +506,7 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
      * **NPHIES Prior-Authorization (PA) Status:** [PA EXEMPT: Service < 500 SAR (Level 1 Violation to request PA) / PA MANDATORY: Service >= 500 SAR (60-min SLA enforced) / PA EXEMPT: Emergency Acute Pain Protocol (24-hr notification)].
      * **Mandatory Diagnostic Attachments:** [Pre-op PA / Working Length PA / Post-op PA / OPG / CBCT / Clinical Photo / Periodontal Charting / None required].
      * **Clinical Justification Sentence:** [Concise 1-line medical necessity statement for clearinghouse audit].
-     * **#1 Technical Denial Trap:** [The exact compliance error that triggers rejection for this specific code].
+     * **#1 Technical Denial Trap & Regulatory Citation:** [Cite exact SBSCS standard, Article 11 tariff rule, or Tabular List page number that protects against rejection].
 """)
         sec_num += 1
 
@@ -528,23 +534,26 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 
     return "".join(instructions)
 
-def generate_scrubbed_package(client, doctor_input, cchi_text, icd_db, tariff_text, system_instruction):
+def generate_scrubbed_package(client, doctor_input, icd_db, tariff_text, system_instruction):
     icd_reference = "\n".join([f"- {item['code']}: {item['title']} ({item['category']})" for item in icd_db]) if icd_db else "[Built-in ICD-10-AM Active]"
+    
+    # Real-time FTS5 RAG retrieval from ferrule_knowledge.db
+    rag_context = query_fts5_rag_knowledge(doctor_input, max_chunks=4)
 
     prompt_payload = f"""
-OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX (ACHI PROCEDURES GROUND TRUTH):
-{cchi_text if cchi_text else "[Built-in ACHI/SBS Knowledge Active]"}
-
-OFFICIAL ICD-10-AM DENTAL DIAGNOSTIC CONCEPT TABLE (MANDATORY DIAGNOSIS GROUND TRUTH):
+OFFICIAL ICD-10-AM DENTAL DIAGNOSTIC GROUND TRUTH:
 {icd_reference}
 
-OFFICIAL CCHI ARTICLE 11 STATUTORY GOVERNMENT DENTAL TARIFF SCHEDULE (COMPLETE 712 PROCEDURES):
+OFFICIAL CCHI ARTICLE 11 STATUTORY GOVERNMENT DENTAL TARIFF SCHEDULE:
 {tariff_text}
+
+VERIFIED TEXTBOOK & REGULATORY EXCLUSION EXCERPTS (FTS5 RAG RETRIEVAL):
+{rag_context if rag_context else "[Standard SBS v3.0 / NPHIES Ground Truth Active]"}
 
 CLINICIAN ENCOUNTER CASE SUMMARY:
 {doctor_input}
 """
-    return call_gemini_with_fallback(
+    return call_gemini_resilient(
         client=client,
         prompt=prompt_payload,
         system_instruction=system_instruction,
@@ -638,7 +647,7 @@ with col_out:
                                 inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
                             )
                             st.session_state.final_scrubbed_output = generate_scrubbed_package(
-                                client, doctor_input, cchi_index_text, cchi_icd_db, cchi_tariff_reference, dynamic_sys_instruction
+                                client, doctor_input, icd_db, tariff_reference, dynamic_sys_instruction
                             )
                         else:
                             st.session_state.discovery_questions = discovery_eval
@@ -648,13 +657,13 @@ with col_out:
             else:
                 st.session_state.discovery_questions = None
                 st.session_state.pending_case_input = ""
-                with st.spinner("Scrubbing documentation against CCHI SBS v3.0 & Article 11 Tariffs..."):
+                with st.spinner("Scrubbing documentation against SBS v3.0, Article 11 Tariffs & NPHIES..."):
                     try:
                         dynamic_sys_instruction = construct_dynamic_instructions(
                             inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
                         )
                         st.session_state.final_scrubbed_output = generate_scrubbed_package(
-                            client, doctor_input, cchi_index_text, cchi_icd_db, cchi_tariff_reference, dynamic_sys_instruction
+                            client, doctor_input, icd_db, tariff_reference, dynamic_sys_instruction
                         )
                     except Exception as e:
                         st.error(f"Audit engine execution failed: {str(e)}")
@@ -695,7 +704,7 @@ with col_out:
                             inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
                         )
                         st.session_state.final_scrubbed_output = generate_scrubbed_package(
-                            client, merged_input, cchi_index_text, cchi_icd_db, cchi_tariff_reference, dynamic_sys_instruction
+                            client, merged_input, icd_db, tariff_reference, dynamic_sys_instruction
                         )
                         st.session_state.discovery_questions = None
                         st.session_state.pending_case_input = ""
