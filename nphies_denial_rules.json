@@ -1,0 +1,346 @@
+[
+  {
+    "Code": "N-DC-001",
+    "Description": "Prior approval is required and was not obtained"
+  },
+  {
+    "Code": "N-DC-002",
+    "Description": "Diagnosis(es) is (are) not covered"
+  },
+  {
+    "Code": "N-DC-003",
+    "Description": "Service(s) is (are) not covered"
+  },
+  {
+    "Code": "N-DC-004",
+    "Description": "Experimental or investigational services, treatments, devices and medications are not covered"
+  },
+  {
+    "Code": "N-DC-005",
+    "Description": "Acupuncture, acupressure, hypnotism, and other forms of alternative treatment are not covered"
+  },
+  {
+    "Code": "N-DC-006",
+    "Description": "Air ambulance transportation services are not covered"
+  },
+  {
+    "Code": "N-DC-007",
+    "Description": "Allergy services and treatments are not covered"
+  },
+  {
+    "Code": "N-DC-008",
+    "Description": "Ambulance transportation for non-emergency situations are not covered"
+  },
+  {
+    "Code": "N-DC-009",
+    "Description": "Behavioral and mental health services, treatments and medications are not covered"
+  },
+  {
+    "Code": "N-DC-010",
+    "Description": "Dental treatments are not covered"
+  },
+  {
+    "Code": "N-DC-011",
+    "Description": "Elective procedure is not covered"
+  },
+  {
+    "Code": "N-DC-012",
+    "Description": "Pre-existing conditions are not covered"
+  },
+  {
+    "Code": "N-DC-013",
+    "Description": "Alternative service should have been utilized"
+  },
+  {
+    "Code": "N-DC-014",
+    "Description": "Service(s) is (are) performed outside authorization validity date"
+  },
+  {
+    "Code": "N-DC-015",
+    "Description": "Claim is a work-related injury/illness and thus the liability of the employer"
+  },
+  {
+    "Code": "N-DC-016",
+    "Description": "Deductible/co-pay not collected from member"
+  },
+  {
+    "Code": "N-DC-017",
+    "Description": "Annual limit/sublimit amount exceeded"
+  },
+  {
+    "Code": "N-DC-018",
+    "Description": "Eye exams and treatments are not covered"
+  },
+  {
+    "Code": "N-DC-019",
+    "Description": "Gender manipulation services and associated expenses including voluntary sterilizations or reversal of sterilizations are not covered"
+  },
+  {
+    "Code": "N-DC-020",
+    "Description": "Hearing services are not covered"
+  },
+  {
+    "Code": "N-DC-021",
+    "Description": "Home Health (Private Nurse) services are not covered"
+  },
+  {
+    "Code": "N-DC-022",
+    "Description": "Home Health (Respite) services are not covered"
+  },
+  {
+    "Code": "N-DC-023",
+    "Description": "Home Health services are not covered"
+  },
+  {
+    "Code": "N-DC-024",
+    "Description": "Immunizations are not covered"
+  },
+  {
+    "Code": "N-DC-025",
+    "Description": "Preventative care is not covered"
+  },
+  {
+    "Code": "N-DC-026",
+    "Description": "Services resulting from attempted suicide or self-infliction are not covered"
+  },
+  {
+    "Code": "N-DC-027",
+    "Description": "Vaccinations are not covered"
+  },
+  {
+    "Code": "N-DC-028",
+    "Description": "Service(s) is (are) not performed"
+  },
+  {
+    "Code": "N-DC-029",
+    "Description": "Service(s) is (are) performed outside period of hospitalization/admission"
+  },
+  {
+    "Code": "N-DC-030",
+    "Description": "Chronic Condition Service(s) is (are) not covered"
+  },
+  {
+    "Code": "N-DC-031",
+    "Description": "Waiting period on pre-existing / specific conditions"
+  },
+  {
+    "Code": "N-DC-032",
+    "Description": "Patient is not a covered member"
+  },
+  {
+    "Code": "N-DC-033",
+    "Description": "Services performed after the last date of coverage"
+  },
+  {
+    "Code": "N-DC-034",
+    "Description": "Services performed prior to the effective date of coverage"
+  },
+  {
+    "Code": "N-DC-035",
+    "Description": "Services performed by a non-network provider"
+  },
+  {
+    "Code": "N-DC-036",
+    "Description": "Benefit maximum for this time period or occurrence has been reached"
+  },
+  {
+    "Code": "N-DC-037",
+    "Description": "Calculation discrepancy"
+  },
+  {
+    "Code": "N-DC-038",
+    "Description": "Service has no contract price"
+  },
+  {
+    "Code": "N-DC-039",
+    "Description": "Multiple procedure payment rules incorrectly applied"
+  },
+  {
+    "Code": "N-DC-040",
+    "Description": "Charges inconsistent with clinician specialty"
+  },
+  {
+    "Code": "N-DC-041",
+    "Description": "Payment is included in the allowance for another service"
+  },
+  {
+    "Code": "N-DC-042",
+    "Description": "Recovery of Payment"
+  },
+  {
+    "Code": "N-DC-043",
+    "Description": "Consultation within free follow up period"
+  },
+  {
+    "Code": "N-DC-044",
+    "Description": "Service is not clinically indicated based on good clinical practice"
+  },
+  {
+    "Code": "N-DC-045",
+    "Description": "Service is not clinically indicated based on good clinical practice, without additional supporting diagnoses/activities"
+  },
+  {
+    "Code": "N-DC-046",
+    "Description": "Activity/diagnosis inconsistent with clinician specialty"
+  },
+  {
+    "Code": "N-DC-047",
+    "Description": "Incorrect DRG calculated"
+  },
+  {
+    "Code": "N-DC-048",
+    "Description": "Service/supply may be appropriate, but too frequent"
+  },
+  {
+    "Code": "N-DC-049",
+    "Description": "Inapropriate Drug Dose"
+  },
+  {
+    "Code": "N-DC-050",
+    "Description": "High alert Drug to drug interaction / Drug combination is contra-indicated"
+  },
+  {
+    "Code": "N-DC-051",
+    "Description": "Authorization quantity exceeds prescription quantity"
+  },
+  {
+    "Code": "N-DC-052",
+    "Description": "Diagnosis is inconsistent with the patient's age"
+  },
+  {
+    "Code": "N-DC-053",
+    "Description": "Diagnosis is inconsistent with the patient's gender"
+  },
+  {
+    "Code": "N-DC-054",
+    "Description": "Service code is inconsistent with the patient's age"
+  },
+  {
+    "Code": "N-DC-055",
+    "Description": "Service code is inconsistent with the patient's gender"
+  },
+  {
+    "Code": "N-DC-056",
+    "Description": "Max duration exceeded"
+  },
+  {
+    "Code": "N-DC-057",
+    "Description": "Max daily dose exceeded"
+  },
+  {
+    "Code": "N-DC-058",
+    "Description": "Service / Medication is above SAR threshold"
+  },
+  {
+    "Code": "N-DC-059",
+    "Description": "Encounter type inconsistent with service(s) / diagnosis"
+  },
+  {
+    "Code": "N-DC-060",
+    "Description": "Diagnosis is inconsistent with the procedure"
+  },
+  {
+    "Code": "N-DC-061",
+    "Description": "Diagnosis is inconsistent with the provider type"
+  },
+  {
+    "Code": "N-DC-062",
+    "Description": "Service(s) is (are) performed outside authorization validity date"
+  },
+  {
+    "Code": "N-DC-063",
+    "Description": "Missing Service Codes in a DRG claim"
+  },
+  {
+    "Code": "N-DC-064",
+    "Description": "Services not available on direct biling"
+  },
+  {
+    "Code": "N-DC-065",
+    "Description": "Prescription out of date."
+  },
+  {
+    "Code": "N-DC-066",
+    "Description": "Drug not listed in formulary"
+  },
+  {
+    "Code": "N-DC-067",
+    "Description": "Refill too soon"
+  },
+  {
+    "Code": "N-DC-068",
+    "Description": "Claim information is inconsistent with pre-certified/authorized services"
+  },
+  {
+    "Code": "N-DC-069",
+    "Description": "Claim is a duplicate based on service codes and dates"
+  },
+  {
+    "Code": "N-DC-070",
+    "Description": "Payment already made for same/similar service within set time frame"
+  },
+  {
+    "Code": "N-DC-071",
+    "Description": "Fraud"
+  },
+  {
+    "Code": "N-DC-072",
+    "Description": "Time limit for submission has expired"
+  },
+  {
+    "Code": "N-DC-073",
+    "Description": "Audit"
+  },
+  {
+    "Code": "N-DC-074",
+    "Description": "Service(s) is (are) not performed (used after audit)"
+  },
+  {
+    "Code": "N-DC-075",
+    "Description": "Claim overlaps inpatient stay. Resubmit only those services rendered outside the inpatient stay"
+  },
+  {
+    "Code": "N-DC-076",
+    "Description": "Date of birth follows the date of service"
+  },
+  {
+    "Code": "N-DC-077",
+    "Description": "Date of death precedes the date of service"
+  },
+  {
+    "Code": "N-DC-078",
+    "Description": "Inpatient admission spans multiple rate periods.  Resubmit separate claims"
+  },
+  {
+    "Code": "N-DC-079",
+    "Description": "Submission not compliant with contractual agreement between provider & payer"
+  },
+  {
+    "Code": "N-DC-080",
+    "Description": "Authorization request overlaps or is within the period of another paid claim or approved authorization."
+  },
+  {
+    "Code": "N-DC-081",
+    "Description": "Authorization request/Claim is a duplicate based on service codes and dates"
+  },
+  {
+    "Code": "N-DC-082",
+    "Description": "Incorrect billing regime"
+  },
+  {
+    "Code": "N-DC-083",
+    "Description": "Requested service code/charges inconsistent with clinician specialty"
+  },
+  {
+    "Code": "N-DC-084",
+    "Description": "Use bundled code"
+  },
+  {
+    "Code": "N-DC-085",
+    "Description": "Requested additional information was not received or was not received within time limit"
+  },
+  {
+    "Code": "N-DC-086",
+    "Description": "Appeal procedures not followed or time limits not met"
+  }
+]

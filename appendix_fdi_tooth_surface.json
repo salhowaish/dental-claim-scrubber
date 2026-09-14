@@ -1,0 +1,58 @@
+[
+  {
+    "Code": "M",
+    "Display": "Mesial",
+    "Definition": "The surface of a tooth that is closest to the midline (middle) of the face.",
+    "CodeSystem": "http://nphies.sa/terminology/CodeSystem/fdi-tooth-surface"
+  },
+  {
+    "Code": "O",
+    "Display": "Occlusal",
+    "Definition": "The chewing surface of posterior teeth."
+  },
+  {
+    "Code": "I",
+    "Display": "Incisal",
+    "Definition": "The biting edge of anterior teeth."
+  },
+  {
+    "Code": "D",
+    "Display": "Distal",
+    "Definition": "The surface of a tooth that faces away from the midline of the face."
+  },
+  {
+    "Code": "B",
+    "Display": "Buccal",
+    "Definition": "The surface of a posterior tooth facing the cheeks."
+  },
+  {
+    "Code": "V",
+    "Display": "Ventral",
+    "Definition": "The surface of a tooth facing the lips."
+  },
+  {
+    "Code": "L",
+    "Display": "Lingual",
+    "Definition": "The surface of a tooth facing the tongue."
+  },
+  {
+    "Code": "MO",
+    "Display": "Mesioclusal",
+    "Definition": "The Mesioclusal surfaces of a tooth."
+  },
+  {
+    "Code": "DO",
+    "Display": "Distoclusal",
+    "Definition": "The Distoclusal surfaces of a tooth."
+  },
+  {
+    "Code": "DI",
+    "Display": "Distoincisal",
+    "Definition": "The Distoincisal surfaces of a tooth."
+  },
+  {
+    "Code": "MOD",
+    "Display": "Mesioclusodistal",
+    "Definition": "The Mesioclusodistal surfaces of a tooth"
+  }
+]
