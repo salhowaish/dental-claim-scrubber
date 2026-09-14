@@ -202,7 +202,6 @@ if "final_scrubbed_output" not in st.session_state:
 # ==========================================
 @st.cache_data(show_spinner=False)
 def load_all_regulatory_assets():
-    # 1. Statutory Article 11 Dental Tariffs (712 Procedures)
     tariffs = []
     if os.path.exists("cchi_article11_tariffs.csv"):
         try:
@@ -220,7 +219,6 @@ def load_all_regulatory_assets():
         except Exception:
             tariffs = []
 
-    # 2. ICD-10-AM Diagnostic Ground Truth
     icd_list = []
     if os.path.exists("cchi_dental_icd10.json"):
         try:
@@ -229,7 +227,6 @@ def load_all_regulatory_assets():
         except Exception:
             icd_list = []
 
-    # 3. NPHIES Denial Triggers (86 Rules)
     denials = []
     if os.path.exists("nphies_denial_rules.json"):
         try:
@@ -239,7 +236,6 @@ def load_all_regulatory_assets():
         except Exception:
             denials = []
 
-    # 4. Official NPHIES FDI Tooth Surface Syntax
     surfaces = []
     if os.path.exists("appendix_fdi_tooth_surface.json"):
         try:
@@ -400,20 +396,6 @@ You are grounded in:
 ================================================================================
 Proactively guard the claim against these active NPHIES denial triggers:
 {nphies_denial_context}
-
-================================================================================
-5. CASE CONTINUITY METADATA BLOCK MANDATE
-================================================================================
-Enclose strictly between <NPHIES_BLOCK> and </NPHIES_BLOCK> tags at the very end:
-<NPHIES_BLOCK>
-[EPISODE_ID]: [Specialty]-[Procedure]-[FDI Tooth/Arch]
-[PRIMARY_ICD10]: [Code] — [Accurate Description]
-[PRIMARY_SBS_CODE]: [SBS 9-digit Code] [Block]
-[CURRENT_STAGE]: Visit [X] of [Total Visits] — [Description of Today's Step]
-[BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / BILLABLE ENCOUNTER (Tariff SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
-[NEXT_VISIT_EXPECTED]: Visit [X+1] — [Description of Next Step]
-[ANTI-UNBUNDLING_LOCK]: [LOCKED / EPISODE_ACTIVE / EPISODE_CLOSED]
-</NPHIES_BLOCK>
 """
 
 DISCOVERY_EVALUATOR_PROMPT = """
@@ -472,9 +454,28 @@ def evaluate_encounter_completeness(client, doctor_input):
 def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway):
     instructions = [BASE_PRINCIPLES]
     
-    if is_staged and staged_pathway != "Auto-detect from case input":
-        instructions.append(f"\nACTIVE WORKFLOW PRE-SET: Clinician selected pathway: {staged_pathway}. Align stage numbering and tariff locks strictly with this clinical pathway.\n")
+    if is_staged:
+        if staged_pathway != "Auto-detect from case input":
+            instructions.append(f"\nACTIVE WORKFLOW PRE-SET: Clinician selected pathway: {staged_pathway}. Align stage numbering and tariff locks strictly with this clinical pathway.\n")
         
+        instructions.append("""
+================================================================================
+NPHIES CASE CONTINUITY METADATA BLOCK MANDATE
+================================================================================
+Because this is an active multi-visit staged episode, enclose strictly between <NPHIES_BLOCK> and </NPHIES_BLOCK> tags at the very end:
+<NPHIES_BLOCK>
+[EPISODE_ID]: [Specialty]-[Procedure]-[FDI Tooth/Arch]
+[PRIMARY_ICD10]: [Code] — [Accurate Description]
+[PRIMARY_SBS_CODE]: [SBS 9-digit Code] [Block]
+[CURRENT_STAGE]: Visit [X] of [Total Visits] — [Description of Today's Step]
+[BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / BILLABLE ENCOUNTER (Tariff SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
+[NEXT_VISIT_EXPECTED]: Visit [X+1] — [Description of Next Step]
+[ANTI-UNBUNDLING_LOCK]: [LOCKED / EPISODE_ACTIVE / EPISODE_CLOSED]
+</NPHIES_BLOCK>
+""")
+    else:
+        instructions.append("\nSINGLE-VISIT ENCOUNTER: Do NOT output any <NPHIES_BLOCK> or Case Continuity Tokens.\n")
+
     instructions.append("\nREQUIRED OUTPUT SECTIONS (Generate ONLY the sections explicitly requested below):\n")
     sec_num = 1
     
@@ -536,8 +537,6 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 
 def generate_scrubbed_package(client, doctor_input, icd_db, tariff_text, system_instruction):
     icd_reference = "\n".join([f"- {item['code']}: {item['title']} ({item['category']})" for item in icd_db]) if icd_db else "[Built-in ICD-10-AM Active]"
-    
-    # Real-time FTS5 RAG retrieval from ferrule_knowledge.db
     rag_context = query_fts5_rag_knowledge(doctor_input, max_chunks=4)
 
     prompt_payload = f"""
@@ -602,7 +601,7 @@ with col_in:
     st.markdown('<div class="sub-section-title">Episode Staging Engine</div>', unsafe_allow_html=True)
     is_staged = st.checkbox(
         "Enable Multi-Visit Episode Continuity Guard", 
-        value=True, 
+        value=False, 
         help="Locks intermediate stages to 0.00 SAR to protect against unbundling rejections, releasing the global tariff on definitive delivery."
     )
     staged_pathway = "Auto-detect from case input"
@@ -730,7 +729,8 @@ with col_out:
         
         st.markdown(clean_markdown)
         
-        if block_content:
+        # Strictly gated: Token block only renders when multi-visit staging is explicitly enabled
+        if is_staged and block_content:
             st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
             st.caption("NPHIES Episode Continuity Token (Persist across multi-visit encounters):")
             st.code(block_content, language="text")
