@@ -289,28 +289,6 @@ with st.sidebar:
         st.caption("Store `GEMINI_API_KEY` in Streamlit Secrets for unauthenticated sessions.")
 
 # ==========================================
-# MAIN INTERFACE HEADER
-# ==========================================
-st.markdown("""
-<div class="brand-header">
-    <div class="brand-top-row">
-        <div class="brand-title-group">
-            <h1 class="brand-title">FERRULE</h1>
-            <span class="brand-author">by Dr. Sulaiman Alhowaish</span>
-        </div>
-        <div class="tag-container">
-            <span class="tag-pill">SBS v3.0</span>
-            <span class="tag-pill">ACHI 10th Ed</span>
-            <span class="tag-pill-gold">NPHIES Core</span>
-        </div>
-    </div>
-    <div class="brand-subtitle">
-        Autonomous Clinical Documentation & NPHIES SBS v3.0 Revenue Assurance Engine
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ==========================================
 # PROMPT LOGIC & REGULATORY PRINCIPLES
 # ==========================================
 BASE_PRINCIPLES = """
@@ -336,11 +314,6 @@ You are grounded in:
   * STATUTORY 60-MIN SLA: Insurers must adjudicate requests within 60 minutes. If delayed beyond 60 minutes, the service is legally DEEMED APPROVED under Chapter 5.
   * REJECTION SAFEGUARD: Rejections can only be issued by a Senior Specialist (أخصائي أول) in the same clinical specialty.
 - EMERGENCY & ACUTE PAIN: Triage levels 1-3 and emergency pulp extirpation (97419-00-10) are PA-EXEMPT under the 24-hour notification rule.
-- TIMELY FILING DEADLINES (CHI Implementing Regulations, Article 90):
-  * Private sector claims: must be submitted within 30 days of service.
-  * Government sector / Health Clusters: must be submitted within 45 days of service.
-  * Insurer settlement deadline: 30 days from receipt.
-  * Re-submission turnaround for rejected claims: strictly 15 days.
 
 ================================================================================
 2. OFFICIAL SBSCS DENTAL CODING & BUNDLING STANDARDS (SBSCS 4000 - 4092)
@@ -373,7 +346,6 @@ You are grounded in:
   * REGENERATIVE & MEMBRANE RULES (SBSCS 4021 Rule 2):
     - Bone graft, natural: 97244-00-00 [456] (SAR 2,000.00).
     - Guided tissue regeneration / resorbable membrane: If documented, a separate code SHALL be assigned for resorbable barrier membrane placement: 97236-00-00 [456] Guided tissue regeneration (SAR 1,500.00).
-  * Crown lengthening (97238-00-00) strictly EXCLUDES routine periodontal flap (97232-xx).
   * MEDICAL NECESSITY THRESHOLD: Quadrant SRP (97222-00-10) and surgical access require documented clinical probing depth >= 4mm, bleeding on probing (BOP), and prior failure of conservative therapy.
 - PROSTHODONTICS (SBSCS 4060):
   * Removable denture fabrication steps (97719-01-10 through 97719-01-60 and 97719-01-80) are STATUTORY NON-BILLABLE items for documentation only (0.00 SAR, [IN-PROGRESS / BUNDLED ENCOUNTER]).
@@ -458,8 +430,7 @@ OUTPUT FORMAT:
   Provide 3 to 5 concise, actionable clinical questions to help the clinician supply the missing facts. For each question, offer quick-select hints or examples (e.g. *Tooth #46?*, *Infiltration vs. ID Block?*, *Surfaces: MOD?*, *Pre-op PA taken?*).
 """
 
-# Resilient caller that handles model version routing seamlessly
-SUPPORTED_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"]
+SUPPORTED_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash"]
 
 def call_gemini_with_fallback(client, prompt, system_instruction, temperature):
     last_err = None
@@ -478,7 +449,6 @@ def call_gemini_with_fallback(client, prompt, system_instruction, temperature):
             except Exception as e:
                 last_err = e
                 err_str = str(e).lower()
-                # If model is not available or 404, break attempt loop to switch to fallback model
                 if "404" in err_str or "not_found" in err_str or "not available" in err_str:
                     break
                 time.sleep(1)
@@ -561,16 +531,6 @@ def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_sty
 def generate_scrubbed_package(client, doctor_input, cchi_text, icd_db, tariff_text, system_instruction):
     icd_reference = "\n".join([f"- {item['code']}: {item['title']} ({item['category']})" for item in icd_db]) if icd_db else "[Built-in ICD-10-AM Active]"
 
-    # If nphies_denial_rules.json exists in repo, add denial definitions to prompt context
-    denials_reference = ""
-    if os.path.exists("nphies_denial_rules.json"):
-        try:
-            with open("nphies_denial_rules.json", "r", encoding="utf-8") as f:
-                drules = json.load(f)
-                denials_reference = "\nOFFICIAL NPHIES REJECTION & DENIAL CODES:\n" + "\n".join([f"- {r.get('Code')}: {r.get('Description')}" for r in drules[:35]])
-        except Exception:
-            pass
-
     prompt_payload = f"""
 OFFICIAL CCHI SBS VERSION 3 DENTAL ALPHABETIC INDEX (ACHI PROCEDURES GROUND TRUTH):
 {cchi_text if cchi_text else "[Built-in ACHI/SBS Knowledge Active]"}
@@ -580,7 +540,6 @@ OFFICIAL ICD-10-AM DENTAL DIAGNOSTIC CONCEPT TABLE (MANDATORY DIAGNOSIS GROUND T
 
 OFFICIAL CCHI ARTICLE 11 STATUTORY GOVERNMENT DENTAL TARIFF SCHEDULE (COMPLETE 712 PROCEDURES):
 {tariff_text}
-{denials_reference}
 
 CLINICIAN ENCOUNTER CASE SUMMARY:
 {doctor_input}
