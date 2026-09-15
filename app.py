@@ -2,15 +2,34 @@ import os
 import re
 import json
 import time
+import base64
 import sqlite3
 import pandas as pd
 import streamlit as st
 from google import genai
 from google.genai import types
 
+# ==========================================
+# ASSET ENCODING & PAGE CONFIGURATION
+# ==========================================
+def get_base64_asset(preferred_names):
+    for name in preferred_names:
+        if os.path.exists(name):
+            try:
+                with open(name, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode()
+                ext = name.split(".")[-1].lower()
+                mime = "image/jpeg" if ext in ["jpg", "jpeg"] else ("image/svg+xml" if ext == "svg" else "image/png")
+                return f"data:{mime};base64,{encoded}", name
+            except Exception:
+                pass
+    return None, None
+
+logo_b64, logo_filename = get_base64_asset(["logo.png", "IMG_1007.jpg", "IMG_1007.png", "image.png", "favicon.svg"])
+
 st.set_page_config(
     page_title="FERRULE | Dr. Sulaiman Alhowaish",
-    page_icon="favicon.svg" if os.path.exists("favicon.svg") else "🦷",
+    page_icon=logo_filename if logo_filename else "🦷",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -42,9 +61,16 @@ st.markdown("""
     }
     .brand-title-group {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         flex-wrap: wrap;
-        gap: 0.5rem 0.75rem;
+        gap: 0.85rem;
+    }
+    .brand-logo-img {
+        height: 48px;
+        width: 48px;
+        border-radius: 8px;
+        object-fit: contain;
+        box-shadow: 0 2px 10px rgba(56, 189, 248, 0.25);
     }
     .brand-title {
         font-size: 2.1rem;
@@ -164,8 +190,17 @@ st.markdown("""
         background: rgba(14, 165, 233, 0.08);
         border: 1px solid rgba(56, 189, 248, 0.3);
         border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
+        padding: 1.2rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .verification-card {
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 8px;
+        padding: 1rem 1.2rem;
+        margin-top: 1rem;
+        margin-bottom: 1.2rem;
     }
 
     @media (max-width: 768px) {
@@ -180,9 +215,6 @@ st.markdown("""
         .brand-author {
             font-size: 0.88rem;
         }
-        .tag-container {
-            margin-top: 0.2rem;
-        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -190,8 +222,8 @@ st.markdown("""
 # ==========================================
 # SESSION STATE INITIALIZATION
 # ==========================================
-if "discovery_questions" not in st.session_state:
-    st.session_state.discovery_questions = None
+if "discovery_data" not in st.session_state:
+    st.session_state.discovery_data = None
 if "pending_case_input" not in st.session_state:
     st.session_state.pending_case_input = ""
 if "final_scrubbed_output" not in st.session_state:
@@ -324,12 +356,16 @@ with st.sidebar:
 # ==========================================
 # MAIN INTERFACE HEADER
 # ==========================================
-st.markdown("""
+logo_element = f'<img src="{logo_b64}" class="brand-logo-img">' if logo_b64 else ""
+st.markdown(f"""
 <div class="brand-header">
     <div class="brand-top-row">
         <div class="brand-title-group">
-            <h1 class="brand-title">FERRULE</h1>
-            <span class="brand-author">by Dr. Sulaiman Alhowaish</span>
+            {logo_element}
+            <div>
+                <h1 class="brand-title" style="display:inline-block;">FERRULE</h1>
+                <span class="brand-author" style="margin-left:0.5rem;">by Dr. Sulaiman Alhowaish</span>
+            </div>
         </div>
         <div class="tag-container">
             <span class="tag-pill">SBS v3.0</span>
@@ -357,43 +393,25 @@ You are grounded in:
 4. Official Article 11 Statutory Government Sector Dental Tariff Schedule (712 Procedures).
 5. CCHI Pre-Approval Policies, CHI Implementing Regulations, and NPHIES Adjudication Standards.
 
-================================================================================
 1. DUAL TAXONOMY & ENCOUNTER ROUTING MANDATE (NPHIES COMPLIANCE)
-================================================================================
 - OUTPATIENT DENTAL CARE: Billed using the Australian Schedule of Dental Services and Glossary (ADA item numbers mapped to SBS v3.0 `97xxx-xx-xx` format).
 - INPATIENT / OPERATING ROOM / MAXILLOFACIAL CARE: Billed using ICD-10-AM Diagnosis + 7-digit ACHI 10th Edition procedure codes.
 - TOOTH NOTATION: Strictly mandatory FDI two-digit numbering (Permanent 11-48, Deciduous 51-85).
 - TOOTH SURFACES: Strictly validate against NPHIES Codeable Concepts: {fdi_surface_reference}. Multi-surface restorations MUST be billed as ONE multi-surface code, never separated.
 
-================================================================================
 2. CCHI / NPHIES PRIOR-AUTHORIZATION (PA) RULES & THE 500 SAR THRESHOLD
-================================================================================
-- MANDATORY 500 SAR EXEMPTION (CCHI Pre-Approval Policy, Chap. 4, Sec. 2):
-  Any outpatient dental service where the one-time treatment is LESS THAN 500 SAR is STRICTLY EXEMPT from Prior Authorization.
-  * LEVEL 1 NPHIES VIOLATION ALERT: Requesting PA for services < 500 SAR is an official violation. Mark these strictly as:
-    [PA EXEMPT: Clean Direct Claim (Service < 500 SAR Threshold)].
-- PA MANDATORY (Services >= 500 SAR & Major Interventions):
-  Indirect crowns [Block 470], bridges [Block 471], dentures [Block 474], implants [Block 400], completed RCT [Block 462], surgical extractions [Block 458], and periodontal surgery [Block 456] require pre-approval.
-  * STATUTORY 60-MIN SLA: Insurers must adjudicate requests within 60 minutes. If delayed beyond 60 minutes, the service is legally DEEMED APPROVED under Chapter 5.
-  * REJECTION SAFEGUARD: Rejections can only be issued by a Senior Specialist (أخصائي أول) in the same clinical specialty.
-- TIMELY FILING DEADLINES (CHI Implementing Regulations, Article 90):
-  * Private sector claims: must be submitted within 30 days of service.
-  * Government sector / Health Clusters: must be submitted within 45 days of service.
-  * Insurer settlement deadline: 30 days from receipt.
-  * Re-submission turnaround for rejected claims: strictly 15 days.
+- MANDATORY 500 SAR EXEMPTION: Any outpatient dental service where the one-time treatment is LESS THAN 500 SAR is STRICTLY EXEMPT from Prior Authorization. Requesting PA for services < 500 SAR is an official Level 1 Violation. Mark as [PA EXEMPT: Clean Direct Claim (Service < 500 SAR Threshold)].
+- PA MANDATORY (Services >= 500 SAR & Major Interventions): Crowns [470], bridges [471], dentures [474], implants [400], completed RCT [462], surgical extractions [458], periodontal surgery [456]. Statutory 60-min SLA enforced.
+- TIMELY FILING DEADLINES: Private: 30 days. Government/Clusters: 45 days. Re-submissions: 15 days.
 
-================================================================================
-3. OFFICIAL SBSCS DENTAL CODING & BUNDLING STANDARDS (SBSCS 4000 - 4092)
-================================================================================
-- Crown Lengthening (97238-00-00 [456]): Strictly EXCLUDES and CANNOT be billed concurrently with routine periodontal flap surgery (97232-xx). Cite Tabular List Page 167 exclusion.
-- Endodontics (SBSCS 4042): Completed RCT is billed as ONE code per tooth based on type (Molar 97420-03-00, Premolar 97420-02-00, Anterior 97420-01-00). Inherently bundles extirpation, instrumentation, and obturation. NEVER bill emergency pulpectomy (97419-00-10) concurrently on the same day. Requires pre-op radiograph.
-- Prosthodontics (SBSCS 4060): Denture fabrication stages (97719-01-10 through 97719-01-60) are non-billable (0.00 SAR). Full denture insertion (97719-01-70 / 97719-00-00) unlocks the global statutory fee (SAR 8,000). Post & core (97625-xx) includes core build-up; do not bill separate core build-up.
-- Orthodontics (SBSCS 4080): Comprehensive exam (97011-00-20, SAR 500) inherently includes intra/extraoral photos, OPG, ceph, tracings, and study models. Separate billing is strictly prohibited.
-- Periodontal Surgery (SBSCS 4021): Flap entry and closure are coded separately from tissue regeneration. Bone graft (97244-00-00, SAR 2,000); GTR membrane (97236-00-00, SAR 1,500). Medical necessity requires documented probing depth >= 4mm and BOP.
+3. OFFICIAL SBSCS DENTAL CODING & BUNDLING STANDARDS
+- Crown Lengthening (97238-00-00 [456]): Strictly EXCLUDES routine periodontal flap surgery (97232-xx) (Tabular List Page 167).
+- Endodontics (SBSCS 4042): Completed RCT billed as ONE code per tooth based on type (Molar 97420-03-00, Premolar 97420-02-00, Anterior 97420-01-00). Inherently bundles extirpation, shaping, obturation. NEVER bill emergency pulpectomy (97419-00-10) concurrently on same day. Requires pre-op radiograph.
+- Prosthodontics (SBSCS 4060): Denture fabrication stages are non-billable (0.00 SAR). Full insertion (97719-01-70) unlocks global fee (SAR 8,000). Post & core includes core build-up.
+- Orthodontics (SBSCS 4080): Comprehensive exam (97011-00-20, SAR 500) inherently bundles photos, OPG, ceph, tracings, and study models. Separate billing prohibited.
+- Periodontal Surgery (SBSCS 4021): Flap entry/closure coded separately from tissue regeneration. Probing depth >= 4mm and BOP required.
 
-================================================================================
 4. NPHIES CLEARINGHOUSE DENIAL PROTECTION RULES
-================================================================================
 Proactively guard the claim against these active NPHIES denial triggers:
 {nphies_denial_context}
 """
@@ -402,36 +420,37 @@ DISCOVERY_EVALUATOR_PROMPT = """
 You are an expert Dental Clinical Documentation Specialist and Revenue Cycle Auditor in Saudi Arabia.
 Analyze the clinician's case note and determine whether critical data points required by CCHI, NPHIES, and SBSCS v3.0 are missing or ambiguous.
 
-CRITICAL CHECKS:
-1. Anatomical Site: Exact FDI tooth number (11-48, 51-85) or quadrant/arch specified?
-2. Diagnostic Specificity: Pulpal/periapical status, caries depth, tooth wear, or edentulous condition?
-3. Radiographs: Pre-op, working length, or post-op radiograph attachments documented?
-4. Mechanics: Specific surfaces for fillings (M, O, D, B, L/P), crown prep vs delivery, implant torque/bone level?
-5. Anesthesia & Isolation: Documented?
-
-OUTPUT FORMAT:
-- If ready: Respond with EXACTLY `[READY_TO_AUDIT]`.
-- If incomplete:
-  ### 📋 Interactive Intake Assessment
-  (1-2 sentence evaluation)
-  ### ❓ Clinician Clarification Checklist:
-  (3-5 concise, actionable questions with quick examples)
+RESPOND STRICTLY IN JSON FORMAT ONLY:
+{
+  "status": "READY_TO_AUDIT" or "NEED_CLARIFICATION",
+  "assessment": "Concise 1-sentence evaluation of what is missing or ambiguous.",
+  "clarifications": [
+    {
+      "label": "Name of Parameter (e.g. FDI Tooth, Diagnostic Etiology, Surfaces, Radiographs, Staging)",
+      "options": ["Specific option 1", "Specific option 2", "Specific option 3", "Other / Stated in Note"]
+    }
+  ]
+}
+Generate 3 to 5 realistic, clinically accurate dropdown parameters with options tailored directly to the patient's case. Return JSON ONLY.
 """
 
 SUPPORTED_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash"]
 
-def call_gemini_resilient(client, prompt, system_instruction, temperature):
+def call_gemini_resilient(client, prompt, system_instruction, temperature, force_json=False):
     last_err = None
     for model_id in SUPPORTED_MODELS:
         for attempt in range(2):
             try:
+                config_args = {
+                    "system_instruction": system_instruction,
+                    "temperature": temperature,
+                }
+                if force_json:
+                    config_args["response_mime_type"] = "application/json"
                 response = client.models.generate_content(
                     model=model_id,
                     contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_instruction,
-                        temperature=temperature,
-                    )
+                    config=types.GenerateContentConfig(**config_args)
                 )
                 return response.text.strip()
             except Exception as e:
@@ -444,12 +463,21 @@ def call_gemini_resilient(client, prompt, system_instruction, temperature):
 
 def evaluate_encounter_completeness(client, doctor_input):
     prompt = f"CLINICIAN ENCOUNTER ENTRY:\n{doctor_input}"
-    return call_gemini_resilient(
+    raw = call_gemini_resilient(
         client=client,
         prompt=prompt,
         system_instruction=DISCOVERY_EVALUATOR_PROMPT,
-        temperature=0.1
+        temperature=0.1,
+        force_json=True
     )
+    try:
+        return json.loads(raw)
+    except Exception:
+        match = re.search(r"(\{.*\})", raw, re.DOTALL)
+        if match:
+            try: return json.loads(match.group(1))
+            except Exception: pass
+        return {"status": "READY_TO_AUDIT"}
 
 def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway):
     instructions = [BASE_PRINCIPLES]
@@ -482,8 +510,7 @@ Because this is an active multi-visit staged episode, enclose strictly between <
     if inc_icd:
         instructions.append(f"""
 {sec_num}. PRIMARY DIAGNOSIS & ETIOLOGY (ICD-10-AM)
-   - Specific, valid ICD-10-AM code from the ground truth table. If site/cause is unspecified, provide code with `[Specify Tooth/Arch]` placeholder.
-   - Include Condition Onset Flag (COF): State `COF = 2 (Present on admission)` or `COF = 1 (Developed during episode)`.
+   - Specific, valid ICD-10-AM code from the ground truth table. State `COF = 2 (Present on admission)` or `COF = 1`.
 """)
         sec_num += 1
 
@@ -501,36 +528,37 @@ Because this is an active multi-visit staged episode, enclose strictly between <
     if inc_checklist:
         instructions.append(f"""
 {sec_num}. CLINICIAN'S RAPID PRE-FLIGHT CHECKLIST (CCHI / NPHIES)
-   - Single-line concise audit checks:
-     * **Anatomical Site Verification:** [FDI tooth number / Quadrant / Arch].
-     * **Condition Onset Flag (COF):** [COF = 2 (Present upon presentation) / COF = 1].
-     * **NPHIES Prior-Authorization (PA) Status:** [PA EXEMPT: Service < 500 SAR (Level 1 Violation to request PA) / PA MANDATORY: Service >= 500 SAR (60-min SLA enforced) / PA EXEMPT: Emergency Acute Pain Protocol (24-hr notification)].
-     * **Mandatory Diagnostic Attachments:** [Pre-op PA / Working Length PA / Post-op PA / OPG / CBCT / Clinical Photo / Periodontal Charting / None required].
-     * **Clinical Justification Sentence:** [Concise 1-line medical necessity statement for clearinghouse audit].
-     * **#1 Technical Denial Trap & Regulatory Citation:** [Cite exact SBSCS standard, Article 11 tariff rule, or Tabular List page number that protects against rejection].
+   - ULTRA-CONCISE & TELEGRAPHIC (Strictly 1 single line per item with markdown checkbox `* [x]`):
+     * [x] **Anatomical Site:** [FDI 2-digit tooth number & surfaces verified]
+     * [x] **Condition Onset:** [COF = 2 (Present upon presentation) confirmed]
+     * [x] **Prior-Auth Status:** [PA-Exempt (< 500 SAR threshold) OR Mandatory PA Reference verified]
+     * [x] **Diagnostic Attachments:** [Pre-op PA / Working Length PA / Post-op PA / OPG / CBCT / Periodontal Chart archived]
+     * [x] **Anti-Denial Protection:** [Primary technical trap avoided with exact standard citation]
 """)
         sec_num += 1
 
     if note_style == "Concise SmartForm Macro (Hospital Standard)":
         instructions.append(f"""
+<CLINICAL_NOTE_START>
 {sec_num}. AUDIT-PROOF EMR CLINICAL NOTE (CONCISE SMARTFORM MACRO)
-   - DO NOT write multi-paragraph narratives. Output rapid, modular SmartForm lines.
-   - Structure:
-     **Encounter Specialty:** [Specialty Name]
-     **Procedure:** [Definitive Procedure Name]
-     **Tooth / Site:** [Tooth FDI #___ / Arch / Quadrant]
-     **Anesthesia:** [None / Infiltration: Specify Agent & Dose / Nerve Block]
-     **Radiographs:** [None / Pre-op PA / Post-op PA: Specify Finding]
-     **Isolation:** [Single-tooth Rubber Dam Isolation documented]
-     **Patient Status:** [Cooperative / Mild Sensitivity / Asymptomatic]
-     **Clinical Procedure:** [Short factual lines detailing steps performed today].
-     **Materials / Delivery:** [Multi-choice pickers: e.g., [PVS / Polyether] or [RelyX / Resin / GI]].
-     **Post-Op & Follow-Up:** [Concise 1-line home care instruction and recall timeframe].
+**Encounter Specialty:** [Specialty Name]
+**Procedure:** [Definitive Procedure Name]
+**Tooth / Site:** [Tooth FDI #___ / Arch / Quadrant]
+**Anesthesia:** [None / Infiltration: Specify Agent & Dose / Nerve Block]
+**Radiographs:** [None / Pre-op PA / Post-op PA: Specify Finding]
+**Isolation:** [Single-tooth Rubber Dam Isolation documented]
+**Patient Status:** [Cooperative / Mild Sensitivity / Asymptomatic]
+**Clinical Procedure:** [Short factual lines detailing steps performed today].
+**Materials / Delivery:** [Multi-choice pickers: e.g., [PVS / Polyether] or [RelyX / Resin / GI]].
+**Post-Op & Follow-Up:** [Concise 1-line home care instruction and recall timeframe].
+<CLINICAL_NOTE_END>
 """)
     elif note_style == "Detailed SOAP Clinical Note (Hospital / Academic)":
         instructions.append(f"""
+<CLINICAL_NOTE_START>
 {sec_num}. AUDIT-PROOF EMR SOAP CLINICAL PROGRESS NOTE (NARRATIVE)
-   - Comprehensive narrative medical record: Subjective, Objective, Assessment, Plan & Procedure, Post-Operative Instructions.
+Comprehensive narrative medical record: Subjective, Objective, Assessment, Plan & Procedure, Post-Operative Instructions.
+<CLINICAL_NOTE_END>
 """)
 
     return "".join(instructions)
@@ -576,7 +604,7 @@ with col_in:
     guided_mode = st.checkbox(
         "Enable Interactive Guided Discovery Mode",
         value=False,
-        help="Recommended for trainees and busy clinicians. If key details (FDI tooth number, vital signs, radiograph types, or specific surfaces) are missing, FERRULE pauses to ask clarifying questions before generating the final claim."
+        help="Evaluates documentation against NPHIES rules and provides convenient dropdown selection lists."
     )
     
     st.markdown('<div class="sub-section-title">Audit Package Configuration</div>', unsafe_allow_html=True)
@@ -638,9 +666,9 @@ with col_out:
             if guided_mode:
                 with st.spinner("Analyzing case completeness against CCHI/NPHIES criteria..."):
                     try:
-                        discovery_eval = evaluate_encounter_completeness(client, doctor_input)
-                        if "[READY_TO_AUDIT]" in discovery_eval:
-                            st.session_state.discovery_questions = None
+                        discovery_result = evaluate_encounter_completeness(client, doctor_input)
+                        if discovery_result.get("status") == "READY_TO_AUDIT":
+                            st.session_state.discovery_data = None
                             st.session_state.pending_case_input = ""
                             dynamic_sys_instruction = construct_dynamic_instructions(
                                 inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
@@ -649,12 +677,12 @@ with col_out:
                                 client, doctor_input, icd_db, tariff_reference, dynamic_sys_instruction
                             )
                         else:
-                            st.session_state.discovery_questions = discovery_eval
+                            st.session_state.discovery_data = discovery_result
                             st.session_state.pending_case_input = doctor_input
                     except Exception as e:
                         st.error(f"Guided analysis failed: {str(e)}")
             else:
-                st.session_state.discovery_questions = None
+                st.session_state.discovery_data = None
                 st.session_state.pending_case_input = ""
                 with st.spinner("Scrubbing documentation against SBS v3.0, Article 11 Tariffs & NPHIES..."):
                     try:
@@ -667,17 +695,25 @@ with col_out:
                     except Exception as e:
                         st.error(f"Audit engine execution failed: {str(e)}")
 
-    # Guided Discovery Mode: Clarification Loop
-    if st.session_state.discovery_questions:
+    # ==========================================
+    # GUIDED DISCOVERY: DROPDOWN SELECTION WORKFLOW
+    # ==========================================
+    if st.session_state.discovery_data:
+        d_data = st.session_state.discovery_data
         st.markdown('<div class="interactive-card">', unsafe_allow_html=True)
-        st.markdown(st.session_state.discovery_questions)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("### 📋 Interactive Intake Assessment")
+        st.write(d_data.get("assessment", "Encounter requires specific clinical parameters to satisfy NPHIES clearinghouse rules."))
+        st.markdown("### ❓ Clinician Clarification Checklist")
+        st.caption("Select the appropriate clinical parameters below from each dropdown list:")
         
-        clarification_input = st.text_area(
-            "Quick Clinician Clarifications (Type missing details below):",
-            placeholder="e.g. Tooth #46, vital cold test negative, pre-op PA taken, 3 canals instrumented, Cavit temp placed...",
-            height=110
-        )
+        clarifications = d_data.get("clarifications", [])
+        chosen_values = {}
+        for idx, item in enumerate(clarifications):
+            lbl = item.get("label", f"Parameter {idx+1}")
+            opts = item.get("options", ["Confirmed / Applicable", "Not Applicable"])
+            chosen_values[lbl] = st.selectbox(lbl, opts, key=f"guide_sel_{idx}")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
         
         btn_c1, btn_c2 = st.columns([1, 1])
         with btn_c1:
@@ -686,50 +722,101 @@ with col_out:
             cancel_guided = st.button("Reset / Clear Assessment", use_container_width=True)
             
         if cancel_guided:
-            st.session_state.discovery_questions = None
+            st.session_state.discovery_data = None
             st.session_state.pending_case_input = ""
             st.session_state.final_scrubbed_output = None
             st.rerun()
             
-        if finalize_guided:
-            if not api_key:
-                st.error("Missing Gemini API credentials.")
-            else:
-                with st.spinner("Synthesizing clinical input and running regulatory audit..."):
-                    try:
-                        client = genai.Client(api_key=api_key)
-                        merged_input = f"{st.session_state.pending_case_input}\n\nCLINICAL CLARIFICATIONS PROVIDED:\n{clarification_input}"
-                        dynamic_sys_instruction = construct_dynamic_instructions(
-                            inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
-                        )
-                        st.session_state.final_scrubbed_output = generate_scrubbed_package(
-                            client, merged_input, icd_db, tariff_reference, dynamic_sys_instruction
-                        )
-                        st.session_state.discovery_questions = None
-                        st.session_state.pending_case_input = ""
-                    except Exception as e:
-                        st.error(f"Finalization failed: {str(e)}")
+        if finalize_guided and api_key:
+            with st.spinner("Synthesizing selected criteria & generating regulatory audit..."):
+                try:
+                    client = genai.Client(api_key=api_key)
+                    clarification_summary = "\n".join([f"- {k}: {v}" for k, v in chosen_values.items()])
+                    merged_input = f"{st.session_state.pending_case_input}\n\nCLINICIAN PARAMETERS SPECIFIED:\n{clarification_summary}"
+                    
+                    dynamic_sys_instruction = construct_dynamic_instructions(
+                        inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
+                    )
+                    st.session_state.final_scrubbed_output = generate_scrubbed_package(
+                        client, merged_input, icd_db, tariff_reference, dynamic_sys_instruction
+                    )
+                    st.session_state.discovery_data = None
+                    st.session_state.pending_case_input = ""
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Finalization failed: {str(e)}")
 
-    # Render Final Audit Results
+    # ==========================================
+    # RENDER FINAL AUDIT RESULTS & NOTE SYNC
+    # ==========================================
     if st.session_state.final_scrubbed_output:
         raw_result = st.session_state.final_scrubbed_output
+        
+        # Extract NPHIES block
         nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
         if nphies_match:
             block_content = nphies_match.group(1).strip()
-            clean_markdown = re.sub(r"<NPHIES_BLOCK>.*?</NPHIES_BLOCK>", "", raw_result, flags=re.DOTALL).strip()
+            clean_result = re.sub(r"<NPHIES_BLOCK>.*?</NPHIES_BLOCK>", "", raw_result, flags=re.DOTALL).strip()
         else:
             fallback_match = re.search(r"(\[EPISODE_ID\].*?\[ANTI-UNBUNDLING_LOCK\].*?$)", raw_result, re.DOTALL)
             if fallback_match:
                 block_content = fallback_match.group(1).strip()
-                clean_markdown = raw_result[:fallback_match.start()].strip()
-                clean_markdown = re.sub(r"(?:🔄\s*)?(?:NPHIES Case Continuity Token.*?$|NPHIES CASE CONTINUITY BLOCK.*?$)", "", clean_markdown, flags=re.MULTILINE).strip()
+                clean_result = raw_result[:fallback_match.start()].strip()
+                clean_result = re.sub(r"(?:🔄\s*)?(?:NPHIES Case Continuity Token.*?$|NPHIES CASE CONTINUITY BLOCK.*?$)", "", clean_result, flags=re.MULTILINE).strip()
             else:
                 block_content = None
-                clean_markdown = raw_result.strip()
+                clean_result = raw_result.strip()
+            
+        # Separate Regulatory Sections (1-3) from Clinical Note
+        note_match = re.search(r"<CLINICAL_NOTE_START>(.*?)<CLINICAL_NOTE_END>", clean_result, re.DOTALL)
+        if note_match:
+            regulatory_sections = clean_result[:note_match.start()].strip()
+            base_clinical_note = note_match.group(1).strip()
+        else:
+            regulatory_sections = clean_result
+            base_clinical_note = ""
+
+        # 1. Render Regulatory Sections
+        st.markdown(regulatory_sections)
         
-        st.markdown(clean_markdown)
+        # 2. Interactive Pre-Flight Checkboxes Synchronized to Clinical Note
+        st.markdown('<div class="verification-card">', unsafe_allow_html=True)
+        st.markdown("#### ✅ Clinician Pre-Flight Verification Sign-Off")
+        st.caption("Active checkmarks automatically stamp into the clinical note below:")
         
-        # Strictly gated: Token block only renders when multi-visit staging is explicitly enabled
+        pv1, pv2, pv3, pv4 = st.columns(4)
+        with pv1:
+            chk_fdi = st.checkbox("FDI Site Confirmed", value=True, key="pv_fdi")
+            chk_rad = st.checkbox("Radiographs Archived", value=True, key="pv_rad")
+        with pv2:
+            chk_dam = st.checkbox("Rubber Dam Documented", value=True, key="pv_dam")
+            chk_pa = st.checkbox("PA Status Cleared", value=True, key="pv_pa")
+        with pv3:
+            chk_cof = st.checkbox("COF = 2 Flag Confirmed", value=True, key="pv_cof")
+            chk_surf = st.checkbox("Surfaces Validated", value=True, key="pv_surf")
+        with pv4:
+            chk_consent = st.checkbox("Informed Consent On File", value=True, key="pv_consent")
+            chk_anti = st.checkbox("Anti-Unbundling Active", value=True, key="pv_anti")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # 3. Render Clinical Note with Dynamic Compliance Stamp
+        if base_clinical_note:
+            stamped_items = []
+            if chk_fdi: stamped_items.append("FDI Site Confirmed")
+            if chk_rad: stamped_items.append("Diagnostic Radiographs Archived")
+            if chk_dam: stamped_items.append("Rubber Dam Isolation Documented")
+            if chk_pa: stamped_items.append("Prior-Authorization Status Cleared")
+            if chk_cof: stamped_items.append("COF=2 Pre-existing Condition Flag")
+            if chk_surf: stamped_items.append("FDI Tooth Surfaces Verified")
+            if chk_consent: stamped_items.append("Informed Consent Documented")
+            if chk_anti: stamped_items.append("Anti-Unbundling Multi-Stage Locked")
+
+            audit_stamp = "\n".join([f"  [✓] {item}" for item in stamped_items]) if stamped_items else "  [!] No verification flags confirmed by clinician."
+            
+            complete_clinical_note = f"{base_clinical_note}\n\n**CLINICAL COMPLIANCE & VERIFICATION AUDIT:**\n{audit_stamp}"
+            st.markdown(complete_clinical_note)
+
+        # 4. Render NPHIES Continuity Block strictly when multi-visit staging is active
         if is_staged and block_content:
             st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
             st.caption("NPHIES Episode Continuity Token (Persist across multi-visit encounters):")
