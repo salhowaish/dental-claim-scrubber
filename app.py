@@ -88,34 +88,19 @@ st.markdown("""
         white-space: nowrap;
     }
     .brand-subtitle {
-        font-size: 0.84rem;
-        font-weight: 400;
+        font-size: 0.90rem;
+        font-weight: 500;
         color: #94A3B8 !important;
         line-height: 1.45;
-        margin-top: 0.4rem;
+        margin-top: 0.45rem;
     }
-    
-    .tag-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem;
-    }
-    .tag-pill {
-        display: inline-block;
-        padding: 0.22rem 0.65rem;
-        border-radius: 9999px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
-        background: rgba(14, 165, 233, 0.12);
-        color: #38BDF8 !important;
-        border: 1px solid rgba(56, 189, 248, 0.25);
-    }
-    .tag-pill-gold {
-        background: rgba(245, 158, 11, 0.12);
-        color: #FBBF24 !important;
-        border: 1px solid rgba(245, 158, 11, 0.25);
+    .brand-version {
+        font-size: 0.75rem;
+        font-weight: 400;
+        color: #64748B !important;
+        line-height: 1.4;
+        margin-top: 0.2rem;
+        letter-spacing: 0.01em;
     }
     
     .profile-card {
@@ -354,7 +339,7 @@ with st.sidebar:
         st.caption("Store `GEMINI_API_KEY` in Streamlit Secrets for unauthenticated sessions.")
 
 # ==========================================
-# MAIN INTERFACE HEADER
+# MAIN INTERFACE HEADER (UPDATED SEPTEMBER 2026)
 # ==========================================
 logo_element = f'<img src="{logo_b64}" class="brand-logo-img">' if logo_b64 else ""
 st.markdown(f"""
@@ -367,14 +352,12 @@ st.markdown(f"""
                 <span class="brand-author" style="margin-left:0.5rem;">by Dr. Sulaiman Alhowaish</span>
             </div>
         </div>
-        <div class="tag-container">
-            <span class="tag-pill">SBS v3.0</span>
-            <span class="tag-pill">ACHI 10th Ed</span>
-            <span class="tag-pill-gold">NPHIES Core</span>
-        </div>
     </div>
     <div class="brand-subtitle">
-        Autonomous Clinical Documentation & NPHIES SBS v3.0 Revenue Assurance Engine
+        NPHIES compliant clinical documentation system and revenue assurance engine
+    </div>
+    <div class="brand-version">
+        Updated September 2026
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -752,7 +735,6 @@ with col_out:
     if st.session_state.final_scrubbed_output:
         raw_result = st.session_state.final_scrubbed_output
         
-        # Extract NPHIES block
         nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
         if nphies_match:
             block_content = nphies_match.group(1).strip()
@@ -767,7 +749,6 @@ with col_out:
                 block_content = None
                 clean_result = raw_result.strip()
             
-        # Separate Regulatory Sections (1-3) from Clinical Note
         note_match = re.search(r"<CLINICAL_NOTE_START>(.*?)<CLINICAL_NOTE_END>", clean_result, re.DOTALL)
         if note_match:
             regulatory_sections = clean_result[:note_match.start()].strip()
@@ -776,10 +757,8 @@ with col_out:
             regulatory_sections = clean_result
             base_clinical_note = ""
 
-        # 1. Render Regulatory Sections
         st.markdown(regulatory_sections)
         
-        # 2. Interactive Pre-Flight Checkboxes Synchronized to Clinical Note
         st.markdown('<div class="verification-card">', unsafe_allow_html=True)
         st.markdown("#### ✅ Clinician Pre-Flight Verification Sign-Off")
         st.caption("Active checkmarks automatically stamp into the clinical note below:")
@@ -799,7 +778,6 @@ with col_out:
             chk_anti = st.checkbox("Anti-Unbundling Active", value=True, key="pv_anti")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # 3. Render Clinical Note with Dynamic Compliance Stamp
         if base_clinical_note:
             stamped_items = []
             if chk_fdi: stamped_items.append("FDI Site Confirmed")
@@ -816,7 +794,6 @@ with col_out:
             complete_clinical_note = f"{base_clinical_note}\n\n**CLINICAL COMPLIANCE & VERIFICATION AUDIT:**\n{audit_stamp}"
             st.markdown(complete_clinical_note)
 
-        # 4. Render NPHIES Continuity Block strictly when multi-visit staging is active
         if is_staged and block_content:
             st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
             st.caption("NPHIES Episode Continuity Token (Persist across multi-visit encounters):")
