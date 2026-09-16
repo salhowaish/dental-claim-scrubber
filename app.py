@@ -151,7 +151,7 @@ st.markdown("""
         margin-bottom: 0.4rem;
     }
     
-    .stTextArea textarea {
+    .stTextArea textarea, .stTextInput input {
         background-color: #161F30 !important;
         color: #F8FAFC !important;
         border: 1px solid rgba(255, 255, 255, 0.14) !important;
@@ -159,7 +159,7 @@ st.markdown("""
         font-size: 0.88rem !important;
         line-height: 1.5 !important;
     }
-    .stTextArea textarea::placeholder {
+    .stTextArea textarea::placeholder, .stTextInput input::placeholder {
         color: #64748B !important;
     }
     
@@ -679,7 +679,7 @@ with col_out:
                         st.error(f"Audit engine execution failed: {str(e)}")
 
     # ==========================================
-    # GUIDED DISCOVERY: DROPDOWN SELECTION WORKFLOW
+    # GUIDED DISCOVERY: DROPDOWN & DYNAMIC OTHER WORKFLOW
     # ==========================================
     if st.session_state.discovery_data:
         d_data = st.session_state.discovery_data
@@ -694,7 +694,21 @@ with col_out:
         for idx, item in enumerate(clarifications):
             lbl = item.get("label", f"Parameter {idx+1}")
             opts = item.get("options", ["Confirmed / Applicable", "Not Applicable"])
-            chosen_values[lbl] = st.selectbox(lbl, opts, key=f"guide_sel_{idx}")
+            selected_val = st.selectbox(lbl, opts, key=f"guide_sel_{idx}")
+            
+            # Immediately show a text box if "Other" or "Stated in Note" is chosen
+            if "other" in str(selected_val).lower():
+                custom_spec = st.text_input(
+                    f"Specify details for {lbl}:",
+                    placeholder="Enter custom clinical detail, tooth #, finding, or surface...",
+                    key=f"guide_other_{idx}"
+                )
+                if custom_spec.strip():
+                    chosen_values[lbl] = f"Other ({custom_spec.strip()})"
+                else:
+                    chosen_values[lbl] = selected_val
+            else:
+                chosen_values[lbl] = selected_val
         
         st.markdown("</div>", unsafe_allow_html=True)
         
