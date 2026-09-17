@@ -176,6 +176,7 @@ st.markdown("""
         border: 1px solid rgba(56, 189, 248, 0.3);
         border-radius: 8px;
         padding: 1.2rem;
+        margin-top: 1rem;
         margin-bottom: 1.2rem;
     }
 
@@ -207,10 +208,6 @@ st.markdown("""
 # ==========================================
 # SESSION STATE INITIALIZATION
 # ==========================================
-if "discovery_data" not in st.session_state:
-    st.session_state.discovery_data = None
-if "pending_case_input" not in st.session_state:
-    st.session_state.pending_case_input = ""
 if "final_scrubbed_output" not in st.session_state:
     st.session_state.final_scrubbed_output = None
 
@@ -397,43 +394,45 @@ You are grounded in:
 4. NPHIES CLEARINGHOUSE DENIAL PROTECTION RULES
 Proactively guard the claim against these active NPHIES denial triggers:
 {nphies_denial_context}
-"""
 
-DISCOVERY_EVALUATOR_PROMPT = """
-You are an expert Dental Clinical Documentation Specialist and Revenue Cycle Auditor in Saudi Arabia.
-Analyze the clinician's case note and determine whether critical data points required by CCHI, NPHIES, and SBSCS v3.0 are missing or ambiguous.
+================================================================================
+5. ZERO-ASSUMPTION INLINE SELECTOR MANDATE (ALL SPECIALTIES & NOTES)
+================================================================================
+You MUST NEVER assume or hallucinate unstated clinical facts.
+- If a parameter is explicitly stated in the clinician's note (e.g., "Tooth 47", "RelyX U200", "Rubber dam isolation"), state that exact fact directly without tokens.
+- If ANY clinical parameter is missing, ambiguous, unstated, or variable across ANY dental specialty (Restorative, Endo, Pros, Perio, Surgery, Ortho, Pedo), you MUST format it as an inline interactive selector token:
+  `[[Field Label: Option 1 | Option 2 | Option 3 | Other / Stated in Note]]`
 
-RESPOND STRICTLY IN JSON FORMAT ONLY:
-{
-  "status": "READY_TO_AUDIT" or "NEED_CLARIFICATION",
-  "assessment": "Concise 1-sentence evaluation of what is missing or ambiguous.",
-  "clarifications": [
-    {
-      "label": "Name of Parameter (e.g. FDI Tooth, Diagnostic Etiology, Surfaces, Radiographs, Staging)",
-      "options": ["Specific option 1", "Specific option 2", "Specific option 3", "Other / Stated in Note"]
-    }
-  ]
-}
-Generate 3 to 5 realistic, clinically accurate dropdown parameters with options tailored directly to the patient's case. Return JSON ONLY.
+MANDATORY RULES FOR INLINE TOKENS:
+1. Every token MUST contain 2 to 5 clinically accurate, context-specific choices.
+2. The final option in every token MUST strictly be `Other / Stated in Note`.
+3. Apply this universally to:
+   - FDI Tooth number or arch quadrant if ambiguous
+   - Restorative cavity surfaces (e.g. `[[Tooth 24 Surfaces: MO | DO | MOD | O | B | Other / Stated in Note]]`)
+   - Anesthesia agent and technique (e.g. `[[Anesthesia Protocol: Infiltration 2% Lidocaine 1:100k epi | Infiltration 4% Articaine 1:100k epi | ID Nerve Block | None (Non-vital) | Other / Stated in Note]]`)
+   - Isolation method (e.g. `[[Isolation Method: Single-Tooth Rubber Dam | Split Dam Isolation | Cotton Rolls & Retraction Cord | Isolite / High-Volume Evacuation | Other / Stated in Note]]`)
+   - Radiographs verified (e.g. `[[Radiographic Verification: Pre-op PA only | Pre-op & Post-op PA archived | Working length PA & Master cone PA | Pre-op CBCT | None required | Other / Stated in Note]]`)
+   - Cements / Restorative materials / Membranes / Graft volumes (e.g. `[[Luting Cement: Dual-Cure Resin (RelyX U200) | Resin Cement (Panavia SA) | Resin-Modified Glass Ionomer | Glass Ionomer (Fuji I) | Other / Stated in Note]]`)
+   - Canal count and configuration for Endodontics
+   - Implant insertion torque & stability protocol
+   - Patient status / intraoperative cooperation
+   - Recall / follow-up interval
 """
 
 SUPPORTED_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash"]
 
-def call_gemini_resilient(client, prompt, system_instruction, temperature, force_json=False):
+def call_gemini_resilient(client, prompt, system_instruction, temperature):
     last_err = None
     for model_id in SUPPORTED_MODELS:
         for attempt in range(2):
             try:
-                config_args = {
-                    "system_instruction": system_instruction,
-                    "temperature": temperature,
-                }
-                if force_json:
-                    config_args["response_mime_type"] = "application/json"
                 response = client.models.generate_content(
                     model=model_id,
                     contents=prompt,
-                    config=types.GenerateContentConfig(**config_args)
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        temperature=temperature,
+                    )
                 )
                 return response.text.strip()
             except Exception as e:
@@ -443,24 +442,6 @@ def call_gemini_resilient(client, prompt, system_instruction, temperature, force
                     break
                 time.sleep(1)
     raise last_err
-
-def evaluate_encounter_completeness(client, doctor_input):
-    prompt = f"CLINICIAN ENCOUNTER ENTRY:\n{doctor_input}"
-    raw = call_gemini_resilient(
-        client=client,
-        prompt=prompt,
-        system_instruction=DISCOVERY_EVALUATOR_PROMPT,
-        temperature=0.1,
-        force_json=True
-    )
-    try:
-        return json.loads(raw)
-    except Exception:
-        match = re.search(r"(\{.*\})", raw, re.DOTALL)
-        if match:
-            try: return json.loads(match.group(1))
-            except Exception: pass
-        return {"status": "READY_TO_AUDIT"}
 
 def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway):
     instructions = [BASE_PRINCIPLES]
@@ -526,14 +507,14 @@ Because this is an active multi-visit staged episode, enclose strictly between <
 {sec_num}. AUDIT-PROOF EMR CLINICAL NOTE (CONCISE SMARTFORM MACRO)
 **Encounter Specialty:** [Specialty Name]
 **Procedure:** [Definitive Procedure Name]
-**Tooth / Site:** [Tooth FDI #___ / Arch / Quadrant]
-**Anesthesia:** [None / Infiltration: Specify Agent & Dose / Nerve Block]
-**Radiographs:** [None / Pre-op PA / Post-op PA: Specify Finding]
-**Isolation:** [Single-tooth Rubber Dam Isolation documented]
-**Patient Status:** [Cooperative / Mild Sensitivity / Asymptomatic]
-**Clinical Procedure:** [Short factual lines detailing steps performed today].
-**Materials / Delivery:** [Multi-choice pickers: e.g., [PVS / Polyether] or [RelyX / Resin / GI]].
-**Post-Op & Follow-Up:** [Concise 1-line home care instruction and recall timeframe].
+**Tooth / Site:** [Tooth FDI # or token if unstated: [[FDI Tooth Site: Tooth 14 | Tooth 24 | Tooth 46 | Other / Stated in Note]]]
+**Anesthesia:** [Exact stated anesthesia or token: [[Anesthesia Protocol: Infiltration 2% Lidocaine 1:100k | Infiltration 4% Articaine 1:100k | ID Nerve Block | None (Non-vital) | Other / Stated in Note]]]
+**Radiographs:** [Exact stated radiographs or token: [[Radiographs Archived: Pre-op PA on record | Pre-op & Post-op PA | Working length PA | None | Other / Stated in Note]]]
+**Isolation:** [Exact stated isolation or token: [[Isolation: Single-Tooth Rubber Dam | Split Rubber Dam | Cotton Rolls & Retraction Cord | Other / Stated in Note]]]
+**Patient Status:** [Exact status or token: [[Patient Status: Cooperative & asymptomatic | Mild sensitivity managed | Apprehensive | Other / Stated in Note]]]
+**Clinical Procedure:** [Short factual lines detailing steps performed today. Embed tokens for any unstated technique/brand/volume].
+**Materials / Delivery:** [Exact materials or token: [[Materials & Luting: Dual-Cure Resin (RelyX U200) | Panavia SA | RMGI | Bio-Oss + Bio-Gide | Other / Stated in Note]]]
+**Post-Op & Follow-Up:** [Exact instruction or token: [[Recall Timeframe: 1 week (Suture removal) | 2 weeks (Crown cementation) | 6 months (Periodic check) | Other / Stated in Note]]].
 <CLINICAL_NOTE_END>
 """)
     elif note_style == "Detailed SOAP Clinical Note (Hospital / Academic)":
@@ -541,6 +522,7 @@ Because this is an active multi-visit staged episode, enclose strictly between <
 <CLINICAL_NOTE_START>
 {sec_num}. AUDIT-PROOF EMR SOAP CLINICAL PROGRESS NOTE (NARRATIVE)
 Comprehensive narrative medical record: Subjective, Objective, Assessment, Plan & Procedure, Post-Operative Instructions.
+Embed tokens `[[Label: Option 1 | Option 2 | Other / Stated in Note]]` for any missing/unspecified clinical parameters.
 <CLINICAL_NOTE_END>
 """)
 
@@ -582,12 +564,6 @@ with col_in:
         label_visibility="collapsed",
         placeholder="Enter encounter details, clinical findings, or paste the NPHIES Case Continuity Token from a prior appointment...",
         height=180
-    )
-    
-    guided_mode = st.checkbox(
-        "Enable Interactive Guided Discovery Mode",
-        value=False,
-        help="Evaluates documentation against NPHIES rules and provides convenient dropdown selection lists."
     )
     
     st.markdown('<div class="sub-section-title">Audit Package Configuration</div>', unsafe_allow_html=True)
@@ -644,111 +620,24 @@ with col_out:
             st.warning("Select at least one output section to compile.")
         else:
             client = genai.Client(api_key=api_key)
-            st.session_state.final_scrubbed_output = None
-            
-            if guided_mode:
-                with st.spinner("Analyzing case completeness against CCHI/NPHIES criteria..."):
-                    try:
-                        discovery_result = evaluate_encounter_completeness(client, doctor_input)
-                        if discovery_result.get("status") == "READY_TO_AUDIT":
-                            st.session_state.discovery_data = None
-                            st.session_state.pending_case_input = ""
-                            dynamic_sys_instruction = construct_dynamic_instructions(
-                                inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
-                            )
-                            st.session_state.final_scrubbed_output = generate_scrubbed_package(
-                                client, doctor_input, icd_db, tariff_reference, dynamic_sys_instruction
-                            )
-                        else:
-                            st.session_state.discovery_data = discovery_result
-                            st.session_state.pending_case_input = doctor_input
-                    except Exception as e:
-                        st.error(f"Guided analysis failed: {str(e)}")
-            else:
-                st.session_state.discovery_data = None
-                st.session_state.pending_case_input = ""
-                with st.spinner("Scrubbing documentation against SBS v3.0, Article 11 Tariffs & NPHIES..."):
-                    try:
-                        dynamic_sys_instruction = construct_dynamic_instructions(
-                            inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
-                        )
-                        st.session_state.final_scrubbed_output = generate_scrubbed_package(
-                            client, doctor_input, icd_db, tariff_reference, dynamic_sys_instruction
-                        )
-                    except Exception as e:
-                        st.error(f"Audit engine execution failed: {str(e)}")
-
-    # ==========================================
-    # GUIDED DISCOVERY: DROPDOWN & DYNAMIC OTHER WORKFLOW
-    # ==========================================
-    if st.session_state.discovery_data:
-        d_data = st.session_state.discovery_data
-        st.markdown('<div class="interactive-card">', unsafe_allow_html=True)
-        st.markdown("### 📋 Interactive Intake Assessment")
-        st.write(d_data.get("assessment", "Encounter requires specific clinical parameters to satisfy NPHIES clearinghouse rules."))
-        st.markdown("### ❓ Clinician Clarification Checklist")
-        st.caption("Select the appropriate clinical parameters below from each dropdown list:")
-        
-        clarifications = d_data.get("clarifications", [])
-        chosen_values = {}
-        for idx, item in enumerate(clarifications):
-            lbl = item.get("label", f"Parameter {idx+1}")
-            opts = item.get("options", ["Confirmed / Applicable", "Not Applicable"])
-            selected_val = st.selectbox(lbl, opts, key=f"guide_sel_{idx}")
-            
-            # Immediately show a text box if "Other" or "Stated in Note" is chosen
-            if "other" in str(selected_val).lower():
-                custom_spec = st.text_input(
-                    f"Specify details for {lbl}:",
-                    placeholder="Enter custom clinical detail, tooth #, finding, or surface...",
-                    key=f"guide_other_{idx}"
-                )
-                if custom_spec.strip():
-                    chosen_values[lbl] = f"Other ({custom_spec.strip()})"
-                else:
-                    chosen_values[lbl] = selected_val
-            else:
-                chosen_values[lbl] = selected_val
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        btn_c1, btn_c2 = st.columns([1, 1])
-        with btn_c1:
-            finalize_guided = st.button("Finalize & Generate Audit-Proof Claim", type="primary", use_container_width=True)
-        with btn_c2:
-            cancel_guided = st.button("Reset / Clear Assessment", use_container_width=True)
-            
-        if cancel_guided:
-            st.session_state.discovery_data = None
-            st.session_state.pending_case_input = ""
-            st.session_state.final_scrubbed_output = None
-            st.rerun()
-            
-        if finalize_guided and api_key:
-            with st.spinner("Synthesizing selected criteria & generating regulatory audit..."):
+            with st.spinner("Scrubbing documentation against SBS v3.0, Article 11 Tariffs & NPHIES..."):
                 try:
-                    client = genai.Client(api_key=api_key)
-                    clarification_summary = "\n".join([f"- {k}: {v}" for k, v in chosen_values.items()])
-                    merged_input = f"{st.session_state.pending_case_input}\n\nCLINICIAN PARAMETERS SPECIFIED:\n{clarification_summary}"
-                    
                     dynamic_sys_instruction = construct_dynamic_instructions(
                         inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
                     )
                     st.session_state.final_scrubbed_output = generate_scrubbed_package(
-                        client, merged_input, icd_db, tariff_reference, dynamic_sys_instruction
+                        client, doctor_input, icd_db, tariff_reference, dynamic_sys_instruction
                     )
-                    st.session_state.discovery_data = None
-                    st.session_state.pending_case_input = ""
-                    st.rerun()
                 except Exception as e:
-                    st.error(f"Finalization failed: {str(e)}")
+                    st.error(f"Audit engine execution failed: {str(e)}")
 
     # ==========================================
-    # RENDER FINAL AUDIT RESULTS & NOTE SYNC
+    # RENDER FINAL AUDIT RESULTS & INLINE DROPDOWNS
     # ==========================================
     if st.session_state.final_scrubbed_output:
         raw_result = st.session_state.final_scrubbed_output
         
+        # 1. Parse NPHIES Continuity Block
         nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
         if nphies_match:
             block_content = nphies_match.group(1).strip()
@@ -763,6 +652,7 @@ with col_out:
                 block_content = None
                 clean_result = raw_result.strip()
             
+        # 2. Extract EMR Note vs Regulatory Header Sections
         note_match = re.search(r"<CLINICAL_NOTE_START>(.*?)<CLINICAL_NOTE_END>", clean_result, re.DOTALL)
         if note_match:
             regulatory_sections = clean_result[:note_match.start()].strip()
@@ -771,28 +661,68 @@ with col_out:
             regulatory_sections = clean_result
             base_clinical_note = ""
 
+        # Render Statutory Sections 1, 2, 3
         st.markdown(regulatory_sections)
         
-        st.markdown('<div class="verification-card">', unsafe_allow_html=True)
-        st.markdown("#### ✅ Clinician Pre-Flight Verification Sign-Off")
-        st.caption("Active checkmarks automatically stamp into the clinical note below:")
-        
-        pv1, pv2, pv3, pv4 = st.columns(4)
-        with pv1:
-            chk_fdi = st.checkbox("FDI Site Confirmed", value=True, key="pv_fdi")
-            chk_rad = st.checkbox("Radiographs Archived", value=True, key="pv_rad")
-        with pv2:
-            chk_dam = st.checkbox("Rubber Dam Documented", value=True, key="pv_dam")
-            chk_pa = st.checkbox("PA Status Cleared", value=True, key="pv_pa")
-        with pv3:
-            chk_cof = st.checkbox("COF = 2 Flag Confirmed", value=True, key="pv_cof")
-            chk_surf = st.checkbox("Surfaces Validated", value=True, key="pv_surf")
-        with pv4:
-            chk_consent = st.checkbox("Informed Consent On File", value=True, key="pv_consent")
-            chk_anti = st.checkbox("Anti-Unbundling Active", value=True, key="pv_anti")
-        st.markdown('</div>', unsafe_allow_html=True)
-
+        # 3. Dynamic Inline Variable Selectors for Note Output
         if base_clinical_note:
+            tokens = list(re.finditer(r"\[\[\s*([^:]+?)\s*:\s*(.+?)\s*\]\]", base_clinical_note))
+            replacements = {}
+            
+            if tokens:
+                st.markdown('<div class="interactive-card">', unsafe_allow_html=True)
+                st.markdown("#### ⚙️ Unspecified Clinical Parameters (Select to Finalize Note)")
+                st.caption("Select the appropriate clinical parameters below. Your selections immediately populate into the clinical note:")
+                
+                cols = st.columns(2) if len(tokens) > 1 else [st.container()]
+                for i, match in enumerate(tokens):
+                    full_token = match.group(0)
+                    field_label = match.group(1).strip()
+                    options = [opt.strip() for opt in match.group(2).split("|") if opt.strip()]
+                    
+                    if not any("other" in o.lower() for o in options):
+                        options.append("Other / Stated in Note")
+                        
+                    with cols[i % len(cols)]:
+                        selected_choice = st.selectbox(field_label, options, key=f"token_sel_{i}")
+                        if "other" in selected_choice.lower():
+                            custom_text = st.text_input(
+                                f"Specify {field_label}:",
+                                placeholder=f"Enter exact {field_label.lower()}...",
+                                key=f"token_custom_{i}"
+                            )
+                            replacements[full_token] = custom_text.strip() if custom_text.strip() else "Other / Specified"
+                        else:
+                            replacements[full_token] = selected_choice
+                            
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Substitute selections in real time
+            live_rendered_note = base_clinical_note
+            for token_pattern, chosen_val in replacements.items():
+                live_rendered_note = live_rendered_note.replace(token_pattern, f"**{chosen_val}**")
+
+            # 4. Clinician Pre-Flight Verification Sign-Off
+            st.markdown('<div class="verification-card">', unsafe_allow_html=True)
+            st.markdown("#### ✅ Clinician Pre-Flight Verification Sign-Off")
+            st.caption("Active checkmarks automatically stamp into the clinical note below:")
+            
+            pv1, pv2, pv3, pv4 = st.columns(4)
+            with pv1:
+                chk_fdi = st.checkbox("FDI Site Confirmed", value=True, key="pv_fdi")
+                chk_rad = st.checkbox("Radiographs Archived", value=True, key="pv_rad")
+            with pv2:
+                chk_dam = st.checkbox("Rubber Dam Documented", value=True, key="pv_dam")
+                chk_pa = st.checkbox("PA Status Cleared", value=True, key="pv_pa")
+            with pv3:
+                chk_cof = st.checkbox("COF = 2 Flag Confirmed", value=True, key="pv_cof")
+                chk_surf = st.checkbox("Surfaces Validated", value=True, key="pv_surf")
+            with pv4:
+                chk_consent = st.checkbox("Informed Consent On File", value=True, key="pv_consent")
+                chk_anti = st.checkbox("Anti-Unbundling Active", value=True, key="pv_anti")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # Build compliance stamp
             stamped_items = []
             if chk_fdi: stamped_items.append("FDI Site Confirmed")
             if chk_rad: stamped_items.append("Diagnostic Radiographs Archived")
@@ -805,9 +735,10 @@ with col_out:
 
             audit_stamp = "\n".join([f"  [✓] {item}" for item in stamped_items]) if stamped_items else "  [!] No verification flags confirmed by clinician."
             
-            complete_clinical_note = f"{base_clinical_note}\n\n**CLINICAL COMPLIANCE & VERIFICATION AUDIT:**\n{audit_stamp}"
+            complete_clinical_note = f"{live_rendered_note}\n\n**CLINICAL COMPLIANCE & VERIFICATION AUDIT:**\n{audit_stamp}"
             st.markdown(complete_clinical_note)
 
+        # 5. Render NPHIES Continuity Block strictly when multi-visit staging is active
         if is_staged and block_content:
             st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
             st.caption("NPHIES Episode Continuity Token (Persist across multi-visit encounters):")
