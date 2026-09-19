@@ -20,8 +20,7 @@ st.markdown("""
     .main-header { font-size: 2.2rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.2rem; }
     .sub-header { font-size: 1.05rem; color: #374151; margin-bottom: 1.2rem; }
     .assistant-box { background-color: #EFF6FF; border-left: 5px solid #2563EB; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
-    .warning-box { background-color: #FFFBEB; border-left: 5px solid #F59E0B; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
-    .success-box { background-color: #ECFDF5; border-left: 5px solid #10B981; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
+    .question-box { background-color: #F3F4F6; border: 1px solid #D1D5DB; padding: 16px; border-radius: 8px; margin-bottom: 12px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -52,45 +51,65 @@ def load_codebook_dataframe():
     return None
 
 # ------------------------------------------------------------------------------
-# 2. PROMPT BUILDERS FOR CLINICIAN ASSISTANT ENGINE
+# 2. DYNAMIC AI DISCOVERY PROMPT WITH AI DROPDOWN GENERATION
 # ------------------------------------------------------------------------------
 
-DISCOVERY_PROMPT = f"""
-You are FERRULE AI — an empathetic, expert Clinical Assistant & Revenue Cycle Partner for Saudi Dental Clinicians.
-Your purpose is to ASSIST and GUIDE the clinician, NOT to examine or quiz them.
-Analyze the clinician's brief note/narrative and identify ANY missing clinical details, documentation elements, or diagnostic evidence required to guarantee 100% audit-proof claim payment under Saudi regulations (SBS v3.0, Article 11, CCHI MDS, NPHIES, and CBAHI ESR standards).
+DYNAMIC_DISCOVERY_PROMPT = """
+You are FERRULE AI — an expert Clinical Assistant and CDI Specialist for Saudi Dental Healthcare.
+Analyze the clinician's brief note and identify ANY missing clinical details required for an audit-proof, insurance claim-denial proof record under Saudi rules (SBS v3.0, Article 11, CCHI MDS, NPHIES, CBAHI ESR).
 
-Analyze the procedure described (e.g. Root Canal, Crown, Filling, Denture, Extraction, Scaling/SRP, Implant, Ortho, etc.) and generate a structured JSON output with missing details to prompt the clinician gently.
+Instead of making the clinician type out text answers, generate a set of 3 to 5 DYNAMIC, HIGHLY SPECIFIC QUESTIONS WITH PRE-POPULATED DROPDOWN OPTIONS (selection choices) based directly on the procedure detected in the note!
 
-Return JSON in this EXACT structure:
-{{
-  "procedure_detected": "Identified Procedure Name (e.g., Molar Root Canal Therapy / Complete Denture)",
-  "missing_critical_details": [
-    "Specific missing item 1 (e.g., Tooth number FDI 11-48, or Tooth Surface M/O/D/B/L)",
-    "Specific missing item 2 (e.g., Pre-op PA X-ray confirmation or Working length log)",
-    "Specific missing item 3 (e.g., Single visit vs Multi-visit stage, Denture try-in step)",
-    "Specific missing item 4 (e.g., Anesthesia type/dosage or Rubber Dam isolation)"
-  ],
-  "medical_necessity_guidance": "Brief explanation of what examination findings or diagnostic criteria must be written in the note to prevent NPHIES claim denials (e.g., N-DC-044, N-DC-045, N-DC-084).",
-  "suggested_questions_for_clinician": [
-    "Which tooth number (FDI #) or mouth region was treated?",
-    "Was this completed in a single visit or is it part of a staged multi-visit treatment?",
-    "What anesthesia and isolation methods were used?",
-    "Which radiographs (Pre-op PA, Working length, Post-op obturation, OPG, CBCT) were taken?"
+Examples of procedures & required dropdowns:
+- If RCT/Pulpectomy: Ask for FDI tooth # (dropdown), Radiographs archived (multiselect options: Pre-op PA, WL log, Post-op obturation PA), Visit stage (dropdown), Anesthesia/Isolation (dropdown).
+- If Crown/Bridge: Ask for FDI tooth # (dropdown), Sound ferrule verification (>1.5mm PA) (dropdown), Core buildup material (dropdown), Impression type (dropdown), Visit stage (dropdown).
+- If Restoration/Filling: Ask for FDI tooth # (dropdown), Tooth surfaces involved (multiselect: M, O, D, B, L, I), Caries depth (dropdown: Enamel K02.0, Dentine K02.1, Pulp exposure K02.5), Material used (dropdown).
+- If Denture: Ask for Arch/Jaw (dropdown: Upper Maxilla, Lower Mandible, Both Arches), Denture stage completed (dropdown: Primary Impression, Border Molding/Final Impression, Jaw Relation/Bite Reg, Wax Try-in, Final Insertion), Resin material (dropdown).
+- If Extraction/Impaction: Ask for FDI tooth # (dropdown), Extraction type (Simple 97311 vs Surgical 97321), Radiograph (Pre-op OPG/PA), Anesthesia type (dropdown).
+
+Return JSON strictly in this EXACT structure:
+{
+  "procedure_detected": "Identified Procedure Name (e.g., Molar Root Canal Therapy / Zirconium Crown Prep)",
+  "medical_necessity_guidance": "Brief 1-2 sentence guidance on medical necessity to avoid NPHIES denials (N-DC-044/045/084).",
+  "questions": [
+    {
+      "id": "q1",
+      "question": "Which tooth (FDI #) or region was treated?",
+      "type": "selectbox",
+      "options": ["Tooth #16 (Upper Right 1st Molar)", "Tooth #11", "Tooth #26", "Tooth #36", "Tooth #46", "Quadrant 1", "Quadrant 2", "Quadrant 3", "Quadrant 4", "Maxillary Arch", "Mandibular Arch"]
+    },
+    {
+      "id": "q2",
+      "question": "Which supporting radiographs / evidence are archived?",
+      "type": "multiselect",
+      "options": ["Pre-operative PA Radiograph", "Working Length Log / Apex Locator PA", "Post-operative Obturation PA", "Bitewing Radiograph Series", "Panoramic Radiograph (OPG)", "Full-Mouth Periodontal Chart (PPD >= 4-5mm)"]
+    },
+    {
+      "id": "q3",
+      "question": "What visit stage was completed today?",
+      "type": "selectbox",
+      "options": ["Single Visit (Completed today)", "Visit 1: Prep / Extirpation / Primary Impression", "Visit 2: Intermediate Dressing / Try-in / Border Molding", "Visit 3: Final Obturation / Crown Cementation / Insertion"]
+    },
+    {
+      "id": "q4",
+      "question": "What anesthesia and isolation method were used?",
+      "type": "selectbox",
+      "options": ["Local Infiltration (2% Lidocaine 1:100k) + Cotton Roll Isolation", "Infiltration / Block + Rubber Dam Isolation", "Nerve Block + Cotton Roll Isolation", "No Local Anesthesia Used"]
+    }
   ]
-}}
+}
 """
 
-def build_final_audit_prompt(doctor_note, note_style, is_staged, staged_stage, additional_details):
+def build_final_audit_prompt(doctor_note, note_style, is_staged, staged_stage, additional_details_formatted):
     prompt = f"""
 You are FERRULE AI — an expert Clinical Assistant, Revenue Cycle Partner, and CDI Specialist in Saudi Arabia.
-Your core mission is to empower the clinician by taking their raw notes and turning them into an AUDIT-PROOF, INSURANCE CLAIM-DENIAL PROOF clinical encounter record that guarantees maximum compliant reimbursement under Saudi regulations.
+Your core mission is to empower the clinician by taking their raw notes and selected dropdown details, turning them into an AUDIT-PROOF, INSURANCE CLAIM-DENIAL PROOF clinical encounter record that guarantees maximum compliant reimbursement under Saudi regulations.
 
-CLINICIAN'S RAW INPUT:
+CLINICIAN'S RAW INPUT NOTE:
 {doctor_note}
 
-ADDITIONAL CONFIRMED CLINICAL DETAILS:
-{additional_details if additional_details else 'None additional provided'}
+CLINICIAN'S DROPDOWN-SELECTED DETAILS:
+{additional_details_formatted if additional_details_formatted else 'All details inferred from primary note.'}
 
 CLINICIAN'S PREFERENCES:
 - Desired Note Style: {note_style}
@@ -130,27 +149,25 @@ Output structured episode tracking metadata strictly enclosed between `<NPHIES_B
     return prompt
 
 # ------------------------------------------------------------------------------
-# 3. STREAMLIT USER INTERFACE (FRICTIONLESS ASSISTANT WORKFLOW)
+# 3. STREAMLIT USER INTERFACE (AI DROPDOWN DISCOVERY WORKFLOW)
 # ------------------------------------------------------------------------------
 
 # Header Banner
 st.markdown('<div class="main-header">🦷 FERRULE AI — Clinical Assistant & Revenue Shield</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Your intelligent clinical copilot: write a brief note, get guided discovery, prevent denials, and generate audit-proof claims.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Write a brief note, let AI generate targeted dropdowns for missing details, prevent denials, and build audit-proof claims.</div>', unsafe_allow_html=True)
 
-# Sidebar Controls (Clinician Options)
+# Sidebar Controls
 with st.sidebar:
     st.header("⚙️ Assistant Preferences")
     
-    # Toggle 1: Guided Discovery Mode
     guided_mode = st.radio(
         "Guided Discovery Mode:",
-        ["ON — Analyze note & ask for missing details", "OFF — Directly generate audit-proof claim & note"],
+        ["ON — AI asks missing details via Dropdowns", "OFF — Directly generate audit-proof claim"],
         index=0,
-        help="When ON, AI proactively suggests missing tooth numbers, X-rays, visit stages, and anesthesia details before finalizing."
+        help="When ON, AI analyzes your note and generates instant dropdown choices for missing clinical variables."
     )
     is_guided_on = guided_mode.startswith("ON")
 
-    # Toggle 2: Clinical Note Format Choice
     note_style = st.selectbox(
         "Clinical Note Style:",
         [
@@ -180,7 +197,7 @@ with st.sidebar:
     st.divider()
     st.info(f"🤖 **Active Engine Model:** Hardcoded to `{HARDCODED_MODEL}`")
 
-# Main Interface — Tabs Layout
+# Main Interface Tabs
 tab1, tab2, tab3, tab4 = st.tabs([
     "📝 1. Clinical Assistant & Audit", 
     "📖 2. Standalone Codebook Search", 
@@ -189,24 +206,25 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ------------------------------------------------------------------------------
-# TAB 1: CLINICAL ASSISTANT & AUDIT
+# TAB 1: CLINICAL ASSISTANT & AUDIT WITH AI DROPDOWNS
 # ------------------------------------------------------------------------------
 with tab1:
-    st.markdown('<div class="assistant-box">💡 <b>How it works:</b> Write down a simple note or a few sentences about your patient encounter. FERRULE AI will analyze your note, guide you on missing details to protect your claim, and generate an ideal audit-proof clinical record.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="assistant-box">💡 <b>Zero-Typing Assistant:</b> Write a brief 1-2 sentence note. FERRULE AI will generate custom <b>dropdown choices</b> for any missing details so you can complete your claim with just a few clicks!</div>', unsafe_allow_html=True)
     
     doctor_note = st.text_area(
         "Enter Clinical Encounter Narrative (a few words or sentences):",
-        height=140,
-        placeholder="e.g., pt came with severe spontaneous pain lower right 1st molar, deep decay into pulp. Performed pulpectomy, working length 21mm, placed CaOH dressing and Cavit temporary filling. Billed RCT and dressing.",
-        help="Write or dictate a brief description of what was done and found during the visit."
+        height=120,
+        placeholder="e.g. prep tooth 16 for zirconium crown placed core buildup and temp crown",
+        help="Write or dictate a brief description of what was done during the visit."
     )
 
     api_key = get_gemini_api_key()
     
     col_a1, col_a2 = st.columns([1, 2])
     with col_a1:
-        run_process = st.button("🚀 Analyze Note & Guide Claim", type="primary", use_container_width=True)
+        run_process = st.button("🚀 Step 1: Analyze Note & Build Dropdowns", type="primary", use_container_width=True)
 
+    # STEP 1: RUN DISCOVERY & BUILD AI DROPDOWNS
     if run_process:
         if not api_key:
             st.error("⚠️ Please enter your Gemini API Key in the sidebar.")
@@ -218,74 +236,105 @@ with tab1:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(HARDCODED_MODEL)
 
-                # Step 1: Run Guided Discovery if Enabled
                 if is_guided_on:
-                    with st.spinner("AI Assistant Analyzing Note for Missing Evidence & Details..."):
-                        disc_prompt = f"{DISCOVERY_PROMPT}\n\nCLINICIAN NOTE:\n{doctor_note}"
+                    with st.spinner("AI Assistant Analyzing Note & Generating Targeted Dropdowns..."):
+                        disc_prompt = f"{DYNAMIC_DISCOVERY_PROMPT}\n\nCLINICIAN NOTE:\n{doctor_note}"
                         disc_response = model.generate_content(
                             disc_prompt,
                             generation_config=genai.types.GenerationConfig(temperature=0.1)
                         )
                         raw_disc = disc_response.text
                         
-                        # Try parsing JSON
                         try:
                             json_match = re.search(r'\{.*\}', raw_disc, re.DOTALL)
                             if json_match:
                                 disc_data = json.loads(json_match.group(0))
                             else:
-                                disc_data = {"procedure_detected": "Dental Procedure", "missing_critical_details": [], "medical_necessity_guidance": raw_disc, "suggested_questions_for_clinician": []}
+                                disc_data = {"procedure_detected": "Dental Procedure", "medical_necessity_guidance": "Complete required clinical indicators.", "questions": []}
                         except Exception:
-                            disc_data = {"procedure_detected": "Dental Procedure", "missing_critical_details": [], "medical_necessity_guidance": raw_disc, "suggested_questions_for_clinician": []}
+                            disc_data = {"procedure_detected": "Dental Procedure", "medical_necessity_guidance": "Complete required clinical indicators.", "questions": []}
 
                         st.session_state["discovery_data"] = disc_data
-
-                # Step 2: Run Full Compliance Audit & Note Generator
-                with st.spinner(f"Generating Audit-Proof Claim & {note_style}..."):
-                    final_prompt = build_final_audit_prompt(
-                        doctor_note, note_style, is_staged, staged_stage, 
-                        st.session_state.get("additional_details_text", "")
-                    )
-                    final_response = model.generate_content(
-                        final_prompt,
-                        generation_config=genai.types.GenerationConfig(temperature=0.1)
-                    )
-                    st.session_state["audit_result"] = final_response.text
-                    st.success("✅ Audit-Proof Claim & Note Generated Successfully!")
+                        st.session_state["doctor_note_saved"] = doctor_note
+                        st.session_state["step1_done"] = True
+                else:
+                    # Directly run Step 2 if Guided Mode is OFF
+                    with st.spinner(f"Generating Audit-Proof Claim & {note_style}..."):
+                        final_prompt = build_final_audit_prompt(doctor_note, note_style, is_staged, staged_stage, "")
+                        final_response = model.generate_content(
+                            final_prompt,
+                            generation_config=genai.types.GenerationConfig(temperature=0.1)
+                        )
+                        st.session_state["audit_result"] = final_response.text
+                        st.success("✅ Audit-Proof Claim & Note Generated Successfully!")
 
             except Exception as e:
                 st.error(f"❌ Execution Error: {str(e)}")
 
-    # Display Guided Discovery Assistant Box if available
+    # DISPLAY STEP 2: AI-GENERATED DROPDOWNS
     if "discovery_data" in st.session_state and is_guided_on:
         disc = st.session_state["discovery_data"]
         st.divider()
-        st.markdown(f"### 💡 AI Guided Discovery: {disc.get('procedure_detected', 'Dental Procedure')}")
-        
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            st.markdown("#### 🔍 Missing Details Needed for Audit-Proof Claim:")
-            for item in disc.get("missing_critical_details", []):
-                st.markdown(f"- ⚠️ **{item}**")
-        with col_g2:
-            st.markdown("#### 🛡️ Medical Necessity & Denial Protection Guidance:")
-            st.info(disc.get("medical_necessity_guidance", "Ensure complete clinical indicators are documented."))
+        st.markdown(f"### 🎯 Step 2: Confirm Missing Details for {disc.get('procedure_detected', 'Dental Procedure')}")
+        st.info(f"💡 **Medical Necessity Tip:** {disc.get('medical_necessity_guidance', 'Select options below to ensure claim approval.')}")
 
-        # Quick Additional Details Input
-        with st.expander("✏️ Quick-Fill Missing Details to Complete Your Note (Optional)", expanded=True):
-            add_input = st.text_input(
-                "Add missing details here (e.g. Tooth #46, Mesial-Occlusal, Rubber dam, 2% Lidocaine, Pre-op & WL X-rays taken):",
-                key="add_details_box",
-                placeholder="e.g. Tooth 46, Mesial-Occlusal, IAN block 2% Lidocaine, Rubber dam isolation, Pre-op PA and WL X-ray archived."
-            )
-            if st.button("🔄 Update & Re-Generate Final Note", type="secondary"):
-                st.session_state["additional_details_text"] = add_input
-                st.rerun()
+        questions = disc.get("questions", [])
+        user_responses = {}
 
-    # Display Audit Results
+        if questions:
+            st.markdown("#### 📋 Select From AI-Generated Dropdowns (Zero Writing Required):")
+            
+            # Form for smooth user selection
+            with st.form("dropdown_discovery_form"):
+                for q in questions:
+                    q_id = q.get("id", "q")
+                    q_text = q.get("question", "Question")
+                    q_type = q.get("type", "selectbox")
+                    q_options = q.get("options", ["Not Applicable / None"])
+
+                    if q_type == "multiselect":
+                        user_responses[q_text] = st.multiselect(q_text, options=q_options, key=f"form_{q_id}")
+                    else:
+                        user_responses[q_text] = st.selectbox(q_text, options=q_options, key=f"form_{q_id}")
+
+                submit_final = st.form_submit_button("🚀 Step 3: Generate Audit-Proof Record", type="primary", use_container_width=True)
+
+            if submit_final:
+                # Format dropdown selections
+                formatted_choices = []
+                for q_k, q_v in user_responses.items():
+                    if isinstance(q_v, list):
+                        formatted_choices.append(f"- **{q_k}**: {', '.join(q_v) if q_v else 'None selected'}")
+                    else:
+                        formatted_choices.append(f"- **{q_k}**: {q_v}")
+                
+                additional_details_formatted = "\n".join(formatted_choices)
+                
+                # Execute Final Audit
+                try:
+                    import google.generativeai as genai
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel(HARDCODED_MODEL)
+
+                    saved_note = st.session_state.get("doctor_note_saved", doctor_note)
+                    with st.spinner("Finalizing Audit-Proof Claim, Tariff Table & Clinical Note..."):
+                        final_prompt = build_final_audit_prompt(
+                            saved_note, note_style, is_staged, staged_stage, additional_details_formatted
+                        )
+                        final_response = model.generate_content(
+                            final_prompt,
+                            generation_config=genai.types.GenerationConfig(temperature=0.1)
+                        )
+                        st.session_state["audit_result"] = final_response.text
+                        st.success("✅ Audit-Proof Claim & Ideal Note Generated Successfully!")
+
+                except Exception as e:
+                    st.error(f"❌ Final Audit Error: {str(e)}")
+
+    # DISPLAY AUDIT RESULTS
     if "audit_result" in st.session_state:
         st.divider()
-        st.markdown("### 🔍 Complete Audit & Revenue Shield Results")
+        st.markdown("### 🔍 Final Audit & Revenue Shield Results")
         st.markdown(st.session_state["audit_result"])
 
 # ------------------------------------------------------------------------------
