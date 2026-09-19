@@ -25,6 +25,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# HARDCODED GEMINI MODEL IDENTIFIER
+HARDCODED_GEMINI_MODEL = "gemini-3.8-flash"
+
 # ------------------------------------------------------------------------------
 # 1. API & ASSET FALLBACK RESILIENCE LAYER
 # ------------------------------------------------------------------------------
@@ -171,6 +174,9 @@ with st.sidebar:
     ])
     
     st.divider()
+    st.info(f"🤖 **Active Engine Model:** Hardcoded to `{HARDCODED_GEMINI_MODEL}`")
+
+    st.divider()
     st.header("🎯 Specialty & Site")
     specialty = st.selectbox("Clinical Specialty", [
         "Endodontics", "Restorative & Operative", "Periodontics", 
@@ -260,11 +266,13 @@ with tab1:
         elif not clinical_input.strip():
             st.error("⚠️ Please enter a clinical encounter narrative before running the audit.")
         else:
-            with st.spinner("Executing 4-Layer Multi-Pass Compliance Audit (CHI, NPHIES, SBS v3.0, ICD-10-AM, CBAHI)..."):
+            with st.spinner(f"Executing 4-Layer Compliance Audit using hardcoded model `{HARDCODED_GEMINI_MODEL}`..."):
                 try:
                     import google.generativeai as genai
                     genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel("gemini-2.5-flash")
+                    
+                    # HARDCODED MODEL INSTANTIATION
+                    model = genai.GenerativeModel(HARDCODED_GEMINI_MODEL)
                     
                     sys_prompt = build_compliance_system_prompt(
                         patient_age, gender, cof_status, pa_status, specialty,
