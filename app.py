@@ -58,27 +58,30 @@ DYNAMIC_DISCOVERY_PROMPT = """
 You are FERRULE AI — an expert Clinical Assistant and CDI Specialist for Saudi Dental Healthcare.
 Analyze the clinician's brief note and identify ANY missing clinical details required for an audit-proof, insurance claim-denial proof record under Saudi rules (SBS v3.0, Article 11, CCHI MDS, NPHIES, CBAHI ESR).
 
-NOTE ON SBS V3.0 CODE FORMATTING: All SBS v3.0 codes MUST be strictly 9 digits in the 'XXXXX-XX-XX' hyphenated format (e.g., 97420-03-00 for Molar RCT, 97455-00-10 for RCT dressing, 97613-02-00 for zirconium crown).
+NOTE ON SBS V3.0 CODE FORMATTING: All SBS v3.0 codes MUST be strictly 9 digits in the 'XXXXX-XX-XX' hyphenated format (e.g., 97420-03-00 for Molar RCT, 97455-00-10 for RCT dressing, 97613-02-00 for zirconium crown, 97719-00-00 for bimaxillary complete denture).
 
 Generate a set of 3 to 5 DYNAMIC, HIGHLY SPECIFIC QUESTIONS WITH PRE-POPULATED DROPDOWN OPTIONS (selection choices) based directly on the procedure detected in the note!
 
-Examples of procedures & required dropdowns:
-- If RCT/Pulpectomy: Ask for FDI tooth # (dropdown), Radiographs archived (multiselect options: Pre-op PA, WL log, Post-op obturation PA), Visit stage (dropdown), Anesthesia/Isolation (dropdown).
-- If Crown/Bridge: Ask for FDI tooth # (dropdown), Sound ferrule verification (>1.5mm PA) (dropdown), Core buildup material (dropdown), Impression type (dropdown), Visit stage (dropdown).
-- If Restoration/Filling: Ask for FDI tooth # (dropdown), Tooth surfaces involved (multiselect: M, O, D, B, L, I), Caries depth (dropdown: Enamel K02.0, Dentine K02.1, Pulp exposure K02.5), Material used (dropdown).
-- If Denture: Ask for Arch/Jaw (dropdown: Upper Maxilla, Lower Mandible, Both Arches), Denture stage completed (dropdown: Primary Impression, Border Molding/Final Impression, Jaw Relation/Bite Reg, Wax Try-in, Final Insertion), Resin material (dropdown).
-- If Extraction/Impaction: Ask for FDI tooth # (dropdown), Extraction type (Simple 97311-01-00 vs Surgical 97321-01-00), Radiograph (Pre-op OPG/PA), Anesthesia type (dropdown).
+Examples of procedures & required dropdowns across all 8 dental specialties:
+1. Endodontics (RCT/Pulpectomy): Ask for FDI tooth # (dropdown), Radiographs archived (multiselect: Pre-op PA, WL log, Post-op obturation PA), Visit stage (dropdown), Anesthesia/Isolation (dropdown).
+2. Fixed Prosthodontics (Crown/Bridge): Ask for FDI tooth # (dropdown), Sound ferrule verification (>1.5mm PA) (dropdown), Core buildup material (dropdown), Impression type (dropdown), Visit stage (dropdown).
+3. Removable Prosthodontics (Dentures): Ask for Arch/Jaw (dropdown: Upper Maxilla, Lower Mandible, Both Arches - Maxillary & Mandibular [Bimaxillary]), Denture stage completed (dropdown: Primary Impression, Border Molding/Final Impression, Jaw Relation/Bite Reg, Wax Try-in, Final Insertion), Resin base material (dropdown).
+4. Restorative/Operative (Fillings): Ask for FDI tooth # (dropdown), Surfaces involved (multiselect: M, O, D, B, L, I), Caries depth (dropdown: Enamel K02.0, Dentine K02.1, Pulp exposure K02.5), Material used (dropdown).
+5. Oral Surgery (Extractions/Impactions): Ask for FDI tooth # (dropdown), Extraction type (Simple 97311-01-00 vs Surgical 97321-01-00 vs Soft tissue/Bony Impaction 97322/23/24), Radiograph (Pre-op OPG/PA), Anesthesia type (dropdown).
+6. Periodontics (Scaling/Flap Surgery): Ask for Oral Quadrant (dropdown: Q1, Q2, Q3, Q4), Full-mouth Periodontal Chart PPD >= 4-5mm (dropdown), Diagnosis (K05.3 Chronic Periodontitis) (dropdown).
+7. Dental Implants: Ask for Implant site (FDI #), Surgical stage (Stage 1 Placement 45845-00-00 vs Stage 2 Uncovering 45847-00-00 vs Abutment/Crown 97665/97661), CBCT archived (dropdown).
+8. Preventive & Diagnostic: Ask for Exam type (Comprehensive 97011-00-00, Periodic 97012-00-00), Fluoride/Scaling, Radiograph type (Periapical 97022-00-10, Bitewing 97022-00-20, OPG 97037-00-00).
 
 Return JSON strictly in this EXACT structure:
 {
-  "procedure_detected": "Identified Procedure Name (e.g., Molar Root Canal Therapy [SBS 97420-03-00] / Zirconium Crown Prep [SBS 97613-02-00])",
+  "procedure_detected": "Identified Procedure Name (e.g., Bimaxillary Complete Denture / Molar Root Canal Therapy / Zirconium Crown Prep)",
   "medical_necessity_guidance": "Brief 1-2 sentence guidance on medical necessity to avoid NPHIES denials (N-DC-044/045/084).",
   "questions": [
     {
       "id": "q1",
       "question": "Which tooth (FDI #) or region was treated?",
       "type": "selectbox",
-      "options": ["Tooth #16 (Upper Right 1st Molar)", "Tooth #11", "Tooth #26", "Tooth #36", "Tooth #46", "Quadrant 1", "Quadrant 2", "Quadrant 3", "Quadrant 4", "Maxillary Arch", "Mandibular Arch"]
+      "options": ["Tooth #16 (Upper Right 1st Molar)", "Tooth #11", "Tooth #26", "Tooth #36", "Tooth #46", "Both Arches (Upper Maxillary & Lower Mandibular)", "Quadrant 1", "Quadrant 2", "Quadrant 3", "Quadrant 4"]
     },
     {
       "id": "q2",
@@ -117,13 +120,52 @@ CLINICIAN'S PREFERENCES:
 - Desired Note Style: {note_style}
 - Multi-Visit Staged Encounter: {'YES (' + staged_stage + ')' if is_staged else 'NO / Single Visit'}
 
-STRICT REGULATORY & COMPLIANCE MANDATES TO ENFORCE:
-1. CRITICAL SBS V3.0 CODE FORMAT: ALL Saudi Billing System (SBS v3.0) procedure codes MUST be formatted strictly as 9 digits in the 'XXXXX-XX-XX' hyphenated format (e.g., 97420-03-00 for Molar RCT, 97455-00-10 for RCT dressing, 97613-02-00 for Zirconium crown, 97719-01-80 for Tooth prep, 97521-00-00 for Posterior restoration). NEVER write 5-digit or unhyphenated codes in the SBS v3.0 column.
-2. ICD-10-AM DIAGNOSTIC DEPTH: Map the deepest anatomical caries/disease depth (K02.0 Enamel | K02.1 Dentine | K04.0 Irreversible Pulpitis | K05.3 Chronic Periodontitis). Prevent diagnosis mismatches (N-DC-044/N-DC-060).
-3. SBS V3.0 TARIFF LOCKS & UNBUNDLING SHIELD: Lock intermediate visits (e.g., RCT dressing 97455-00-10 or crown prep 97719-01-80) at 0.00 SAR ("part of main service") to eliminate unbundling fraud rejections (N-DC-084 / Error 1675). Global fees unlock ONLY on final completion visits.
-4. ARTICLE 11 TARIFF PRICING: Apply statutory government prices for billable definitive services.
-5. NPHIES ATTACHMENT MATRIX: Explicitly document required radiographs (Pre-op PA, Working length, Post-op obturation, OPG, CBCT) or Periodontal charts (PPD >= 4-5mm).
-6. CBAHI ESR SAFETY STANDARDS: Verify FDI 2-digit site safety (ESR QM.18) and documentation integrity (PC.10).
+STRICT REGULATORY & COMPLIANCE MASTER MATRIX (ENFORCE ALL 8 SPECIALTIES):
+
+1. CRITICAL SBS V3.0 CODE FORMAT: ALL Saudi Billing System (SBS v3.0) procedure codes MUST be formatted strictly as 9 digits in the 'XXXXX-XX-XX' hyphenated format (e.g., 97420-03-00 for Molar RCT, 97455-00-10 for RCT dressing, 97613-02-00 for Zirconium crown, 97719-01-80 for Tooth prep, 97521-00-00 for Posterior restoration, 97719-00-00 for Bimaxillary complete denture). NEVER write 5-digit or unhyphenated codes in the SBS v3.0 column.
+
+2. REMOVABLE PROSTHODONTICS (SBS BLOCK 474/475/476):
+   - BIMAXILLARY COMPLETE DENTURE MANDATE (SBS 97719-00-00): When complete dentures are provided for BOTH upper (maxillary) and lower (mandibular) arches together, they MUST be billed under the single combination code 97719-00-00 ('Removable complete denture, maxillary and mandibular', ACHI 97719-00). NEVER split or unbundle bimaxillary complete dentures into separate single-arch codes (97711-00-00 and 97712-00-00) when treating both arches together.
+   - SINGLE ARCH COMPLETE DENTURES: Maxillary complete denture (97711-00-00), Mandibular complete denture (97712-00-00).
+   - INTERIM DENTURES: Interim bimaxillary complete dentures (97715-00-10).
+   - STAGED TARIFF LOCKS: Preliminary impressions (97719-01-10), border molding (97719-01-20), final impression (97719-01-30), jaw relation/bite reg (97719-01-50), and wax try-in (97719-01-60) MUST be locked at 0.00 SAR during intermediate visits to prevent unbundling rejections (N-DC-084). Global fee releases ONLY on final delivery (Visit 5).
+   - DIAGNOSIS: Complete loss of teeth (K08.1) + Atrophy of edentulous alveolar ridge (K08.2).
+
+3. FIXED PROSTHODONTICS — CROWNS & BRIDGES (SBS BLOCK 470/471/472):
+   - Single crowns: Porcelain/Ceramic (97613-01-00), Zirconium (97613-02-00), E-max (97613-03-00), Full Metal (97611-00-00).
+   - Bridge pontics: Direct (97642-00-00), Indirect (97643-00-10).
+   - Tooth prep (97719-01-80) & Temporary crown (97631-00-10) are locked at 0.00 SAR ("part of main service"). Global crown fee unlocks on delivery. Core buildup (97575-00-10) is separately billable on Visit 1 (300 SAR).
+   - EVIDENCE: Pre-op PA proving sound ferrule height (>1.5-2.0mm) to avoid N-DC-045.
+
+4. ENDODONTICS (SBS BLOCK 461/462/463/464):
+   - Anterior RCT (97420-01-00), Premolar RCT (97420-02-00), Molar RCT (97420-03-00).
+   - Direct Pulp Cap (97411-00-10), Pulpotomy (97414-00-00).
+   - Intermediate Ca(OH)2 dressing/irrigation (97455-00-10) locked at 0.00 SAR during multi-visit care.
+   - DIAGNOSIS: Irreversible Pulpitis (K04.0), Pulp Necrosis (K04.1), or Apical Periodontitis (K04.4).
+   - EVIDENCE: 3-X-ray series (Pre-op PA + Working Length Log + Post-op Obturation PA).
+
+5. RESTORATIVE & OPERATIVE (SBS BLOCK 465/466/469):
+   - Anterior Composite: 1 surf (97511-00-00), 2 surf (97512-00-00), 3 surf (97513-00-00), 4+ surf (97514-00-00).
+   - Posterior Composite: 1 surf (97521-00-00), 2 surf (97522-00-00), 3 surf (97523-00-00), 4+ surf (97524-00-00).
+   - DIAGNOSIS: Enamel Caries (K02.0), Dentine Caries (K02.1), Cementum Caries (K02.2).
+
+6. ORAL SURGERY (SBS BLOCK 457/458/459):
+   - Simple Extraction (97311-01-00), Surgical Extraction (97321-01-00).
+   - Soft tissue impaction (97322-00-00), Partial bony impaction (97323-00-00), Complete bony impaction (97324-00-00).
+   - EVIDENCE: Pre-op OPG or Periapical radiograph archived.
+
+7. PERIODONTICS (SBS BLOCK 456):
+   - Calculus removal/Scaling (97114-00-00), Root Planing & Subgingival Curettage per tooth/quadrant (97281-00-10), Flap surgery (97232-00-00).
+   - Mandates Quadrant site selection (Q1-Q4).
+   - DIAGNOSIS & EVIDENCE: Chronic Periodontitis (K05.3) + Full-mouth Periodontal Chart (PPD >= 4-5mm).
+
+8. DENTAL IMPLANTS (SBS BLOCK 473):
+   - Stage 1 Implant placement (45845-00-00), Stage 2 Uncovering (45847-00-00), Implant Crown (97665-00-00).
+   - Enforces 3-6 month separation interval between Stage 1 and Stage 2.
+
+9. PREVENTIVE & DIAGNOSTIC (SBS BLOCK 450/451/490):
+   - Comprehensive Exam (97011-00-00), Periodic Exam (97012-00-00), Consultation (97014-00-00).
+   - Consultation Lock (N-DC-043): Consultations within 14-30 days for same condition during active care are locked at 0.00 SAR.
 
 OUTPUT REQUIREMENTS:
 Produce a structured, clean response with these exact sections:
@@ -261,7 +303,6 @@ with tab1:
                         st.session_state["doctor_note_saved"] = doctor_note
                         st.session_state["step1_done"] = True
                 else:
-                    # Directly run Step 2 if Guided Mode is OFF
                     with st.spinner(f"Generating Audit-Proof Claim & {note_style}..."):
                         final_prompt = build_final_audit_prompt(doctor_note, note_style, is_staged, staged_stage, "")
                         final_response = model.generate_content(
@@ -350,7 +391,7 @@ with tab2:
         with col_c1:
             search_query = st.text_input(
                 "🔍 Search Code, Keyword, or Description:", 
-                placeholder="e.g. 97420-03-00, root canal, crown, pulpectomy, examination, restoration...",
+                placeholder="e.g. 97420, root canal, crown, pulpectomy, examination, restoration...",
             )
         with col_c2:
             if "SBS Block Number" in codebook_df.columns:
@@ -396,11 +437,11 @@ with tab3:
         - **`BE-1-4`**: Prior approval required and not obtained.
         """)
     with col_r2:
-        st.markdown("#### 💰 Mandatory Multi-Visit Tariff Locks (9-Digit SBS v3.0 Codes)")
+        st.markdown("#### 💰 Mandatory Multi-Visit Tariff Locks")
         st.markdown("""
-        - **Root Canal Therapy (`97420-03-00`):** Intermediate dressing (`97455-00-10`) locked at **`0.00 SAR`**. Global tariff unlocks on obturation.
-        - **Indirect Crowns (`97613-02-00`):** Tooth prep (`97719-01-80`) & Temp crown (`97631-00-10`) locked at **`0.00 SAR`**. Tariff unlocks on crown delivery.
-        - **Complete Dentures (`97711-00-00` / `97721-00-00`):** Impressions, try-in (`97719-01-10` to `60`) locked at **`0.00 SAR`**. Fee unlocks on final insertion.
+        - **Root Canal Therapy (97420):** Intermediate dressing (`97455`) locked at **`0.00 SAR`**. Global tariff unlocks on obturation.
+        - **Indirect Crowns (97613):** Tooth prep (`97719`) & Temp crown (`97631`) locked at **`0.00 SAR`**. Tariff unlocks on crown delivery.
+        - **Bimaxillary Complete Dentures (97719):** Single code `97719-00-00`. Impressions (`97719-01-10`) locked at **`0.00 SAR`**. Fee unlocks on insertion.
         """)
 
 # ------------------------------------------------------------------------------
