@@ -1,465 +1,814 @@
-import streamlit as st
-import json
 import os
 import re
+import json
+import time
+import base64
+import sqlite3
 import pandas as pd
+import streamlit as st
+from google import genai
+from google.genai import types
 
-# Page Configuration
+# ==========================================
+# ASSET ENCODING & PAGE CONFIGURATION
+# ==========================================
+def get_base64_asset(preferred_names):
+    for name in preferred_names:
+        if os.path.exists(name):
+            try:
+                with open(name, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode()
+                ext = name.split(".")[-1].lower()
+                mime = "image/jpeg" if ext in ["jpg", "jpeg"] else ("image/svg+xml" if ext == "svg" else "image/png")
+                return f"data:{mime};base64,{encoded}", name
+            except Exception:
+                pass
+    return None, None
+
+logo_b64, logo_filename = get_base64_asset(["logo.png", "IMG_1007.jpg", "IMG_1007.png", "image.png", "favicon.svg"])
+
 st.set_page_config(
-    page_title="FERRULE AI — Clinical Assistant & Revenue Shield",
-    page_icon="🦷",
+    page_title="FERRULE | Dr. Sulaiman Alhowaish",
+    page_icon=logo_filename if logo_filename else "🦷",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-HARDCODED_MODEL = "gemini-3.8-flash"
-
-# Custom Styling
+# ==========================================
+# ENTERPRISE CLINICAL CSS THEME (CANVAS-LOCKED)
+# ==========================================
 st.markdown("""
 <style>
-    .main-header { font-size: 2.2rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.2rem; }
-    .sub-header { font-size: 1.05rem; color: #374151; margin-bottom: 1.2rem; }
-    .assistant-box { background-color: #EFF6FF; border-left: 5px solid #2563EB; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
-    .question-box { background-color: #F3F4F6; border: 1px solid #D1D5DB; padding: 16px; border-radius: 8px; margin-bottom: 12px; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
+    html, body, .stApp {
+        background-color: #0B0F19 !important;
+        color: #F8FAFC !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    .brand-header {
+        margin-bottom: 1.25rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .brand-top-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .brand-title-group {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.85rem;
+    }
+    .brand-logo-img {
+        height: 48px;
+        width: 48px;
+        border-radius: 8px;
+        object-fit: contain;
+        box-shadow: 0 2px 10px rgba(56, 189, 248, 0.25);
+    }
+    .brand-title {
+        font-size: 2.1rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #F8FAFC !important;
+        margin: 0;
+        line-height: 1.1;
+    }
+    .brand-author {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #38BDF8 !important;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+    }
+    .brand-subtitle {
+        font-size: 0.90rem;
+        font-weight: 500;
+        color: #94A3B8 !important;
+        line-height: 1.45;
+        margin-top: 0.45rem;
+    }
+    .brand-version {
+        font-size: 0.75rem;
+        font-weight: 400;
+        color: #64748B !important;
+        line-height: 1.4;
+        margin-top: 0.2rem;
+        letter-spacing: 0.01em;
+    }
+    
+    .profile-card {
+        background: rgba(30, 41, 59, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 1.15rem;
+        margin-bottom: 1.25rem;
+    }
+    .profile-name {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #F8FAFC !important;
+        margin-bottom: 0.2rem;
+    }
+    .profile-role {
+        font-size: 0.80rem;
+        font-weight: 600;
+        color: #38BDF8 !important;
+        margin-bottom: 0.15rem;
+        line-height: 1.35;
+    }
+    .profile-org {
+        font-size: 0.76rem;
+        color: #94A3B8 !important;
+        line-height: 1.4;
+        margin-bottom: 0.75rem;
+    }
+    .profile-contact {
+        font-size: 0.75rem;
+        color: #CBD5E1 !important;
+        line-height: 1.65;
+        padding-top: 0.65rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .profile-contact a {
+        color: #38BDF8 !important;
+        text-decoration: none;
+    }
+    
+    .sub-section-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #94A3B8 !important;
+        margin-top: 0.95rem;
+        margin-bottom: 0.4rem;
+    }
+    
+    .stTextArea textarea, .stTextInput input {
+        background-color: #161F30 !important;
+        color: #F8FAFC !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        border-radius: 8px !important;
+        font-size: 0.88rem !important;
+        line-height: 1.5 !important;
+    }
+    .stTextArea textarea::placeholder, .stTextInput input::placeholder {
+        color: #64748B !important;
+    }
+    
+    div.stButton > button:first-child {
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.88rem;
+        letter-spacing: 0.01em;
+        padding: 0.55rem 1.2rem;
+    }
+
+    .interactive-card {
+        background: rgba(14, 165, 233, 0.08);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        border-radius: 8px;
+        padding: 1.2rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .verification-card {
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 8px;
+        padding: 1rem 1.2rem;
+        margin-top: 1rem;
+        margin-bottom: 1.2rem;
+    }
+
+    @media (max-width: 768px) {
+        .brand-top-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+        .brand-title {
+            font-size: 1.65rem;
+        }
+        .brand-author {
+            font-size: 0.88rem;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------------------------------------------------------------------
-# 1. API KEY & DATA LOADERS
-# ------------------------------------------------------------------------------
+# ==========================================
+# SESSION STATE INITIALIZATION
+# ==========================================
+if "discovery_data" not in st.session_state:
+    st.session_state.discovery_data = None
+if "pending_case_input" not in st.session_state:
+    st.session_state.pending_case_input = ""
+if "final_scrubbed_output" not in st.session_state:
+    st.session_state.final_scrubbed_output = None
 
-def get_gemini_api_key():
-    """Retrieve Gemini API Key from Streamlit Secrets or Sidebar Input."""
-    if "GEMINI_API_KEY" in st.secrets and st.secrets["GEMINI_API_KEY"]:
-        return st.secrets["GEMINI_API_KEY"]
-    return st.sidebar.text_input("Gemini API Key", type="password", help="Enter API Key if not in secrets.toml")
+# ==========================================
+# BACKEND: REGULATORY ASSET INGESTION & FTS5 RAG
+# ==========================================
+@st.cache_data(show_spinner=False)
+def load_all_regulatory_assets():
+    tariffs = []
+    if os.path.exists("cchi_article11_tariffs.csv"):
+        try:
+            df = pd.read_csv("cchi_article11_tariffs.csv", skiprows=1, encoding="utf-8", encoding_errors="ignore")
+            df = df.dropna(how="all", axis=1).dropna(how="all", axis=0)
+            df.columns = df.columns.str.strip()
+            for _, r in df.iterrows():
+                hyphen = str(r.get("SBS code -Hyphenated", "")).strip()
+                block = str(r.get("Block", "")).split(".")[0].strip()
+                desc = str(r.get("Short Description", "")).strip()
+                price = str(r.get("Price", "")).strip()
+                spec = str(r.get("Department/ Specialty", "")).strip()
+                if hyphen and hyphen != "nan":
+                    tariffs.append(f"{hyphen} [Block {block}] ({spec}) {desc} -> SAR {price}")
+        except Exception:
+            tariffs = []
 
-@st.cache_data
-def load_codebook_dataframe():
-    """Safely load SBS codebook map CSV."""
-    candidate_paths = [
-        "dental_sbs_achi_map.csv",
-        "knowledge/dental_sbs_achi_map.csv",
-        "/workspace/knowledge/dental_sbs_achi_map.csv"
-    ]
-    for path in candidate_paths:
-        if os.path.exists(path):
-            try:
-                return pd.read_csv(path)
-            except Exception:
-                pass
-    return None
+    icd_list = []
+    if os.path.exists("cchi_dental_icd10.json"):
+        try:
+            with open("cchi_dental_icd10.json", "r", encoding="utf-8") as f:
+                icd_list = json.load(f)
+        except Exception:
+            icd_list = []
 
-# ------------------------------------------------------------------------------
-# 2. DYNAMIC AI DISCOVERY PROMPT WITH AI DROPDOWN GENERATION
-# ------------------------------------------------------------------------------
+    denials = []
+    if os.path.exists("nphies_denial_rules.json"):
+        try:
+            with open("nphies_denial_rules.json", "r", encoding="utf-8") as f:
+                drules = json.load(f)
+                denials = [f"- Code {r.get('Code')}: {r.get('Description')}" for r in drules if r.get("Code")]
+        except Exception:
+            denials = []
 
-DYNAMIC_DISCOVERY_PROMPT = """
-You are FERRULE AI — an expert Clinical Assistant and CDI Specialist for Saudi Dental Healthcare.
-Analyze the clinician's brief note and identify ANY missing clinical details required for an audit-proof, insurance claim-denial proof record under Saudi rules (SBS v3.0, Article 11, CCHI MDS, NPHIES, CBAHI ESR).
+    surfaces = []
+    if os.path.exists("appendix_fdi_tooth_surface.json"):
+        try:
+            with open("appendix_fdi_tooth_surface.json", "r", encoding="utf-8") as f:
+                srules = json.load(f)
+                surfaces = [f"{r.get('Code', r.get('code'))}: {r.get('Display', r.get('display', ''))}" for r in srules]
+        except Exception:
+            surfaces = ["M: Mesial", "O: Occlusal", "D: Distal", "B: Buccal", "L: Lingual", "P: Palatal", "I: Incisal", "V: Vestibular"]
 
-NOTE ON SBS V3.0 CODE FORMATTING: All SBS v3.0 codes MUST be strictly 9 digits in the 'XXXXX-XX-XX' hyphenated format (e.g., 97420-03-00 for Molar RCT, 97455-00-10 for RCT dressing, 97613-02-00 for zirconium crown, 97719-00-00 for bimaxillary complete denture).
+    return (
+        "\n".join(tariffs) if tariffs else "[Article 11 Built-in Tariffs Active]",
+        icd_list,
+        "\n".join(denials) if denials else "[NPHIES 86 Denial Triggers Active]",
+        ", ".join(surfaces)
+    )
 
-Generate a set of 3 to 5 DYNAMIC, HIGHLY SPECIFIC QUESTIONS WITH PRE-POPULATED DROPDOWN OPTIONS (selection choices) based directly on the procedure detected in the note!
+tariff_reference, icd_db, nphies_denial_context, fdi_surface_reference = load_all_regulatory_assets()
 
-Examples of procedures & required dropdowns across all 8 dental specialties:
-1. Endodontics (RCT/Pulpectomy): Ask for FDI tooth # (dropdown), Radiographs archived (multiselect: Pre-op PA, WL log, Post-op obturation PA), Visit stage (dropdown), Anesthesia/Isolation (dropdown).
-2. Fixed Prosthodontics (Crown/Bridge): Ask for FDI tooth # (dropdown), Sound ferrule verification (>1.5mm PA) (dropdown), Core buildup material (dropdown), Impression type (dropdown), Visit stage (dropdown).
-3. Removable Prosthodontics (Dentures): Ask for Arch/Jaw (dropdown: Upper Maxilla, Lower Mandible, Both Arches - Maxillary & Mandibular [Bimaxillary]), Denture stage completed (dropdown: Primary Impression, Border Molding/Final Impression, Jaw Relation/Bite Reg, Wax Try-in, Final Insertion), Resin base material (dropdown).
-4. Restorative/Operative (Fillings): Ask for FDI tooth # (dropdown), Surfaces involved (multiselect: M, O, D, B, L, I), Caries depth (dropdown: Enamel K02.0, Dentine K02.1, Pulp exposure K02.5), Material used (dropdown).
-5. Oral Surgery (Extractions/Impactions): Ask for FDI tooth # (dropdown), Extraction type (Simple 97311-01-00 vs Surgical 97321-01-00 vs Soft tissue/Bony Impaction 97322/23/24), Radiograph (Pre-op OPG/PA), Anesthesia type (dropdown).
-6. Periodontics (Scaling/Flap Surgery): Ask for Oral Quadrant (dropdown: Q1, Q2, Q3, Q4), Full-mouth Periodontal Chart PPD >= 4-5mm (dropdown), Diagnosis (K05.3 Chronic Periodontitis) (dropdown).
-7. Dental Implants: Ask for Implant site (FDI #), Surgical stage (Stage 1 Placement 45845-00-00 vs Stage 2 Uncovering 45847-00-00 vs Abutment/Crown 97665/97661), CBCT archived (dropdown).
-8. Preventive & Diagnostic: Ask for Exam type (Comprehensive 97011-00-00, Periodic 97012-00-00), Fluoride/Scaling, Radiograph type (Periapical 97022-00-10, Bitewing 97022-00-20, OPG 97037-00-00).
+def query_fts5_rag_knowledge(query_narrative, max_chunks=4):
+    db_path = "ferrule_knowledge.db"
+    if not os.path.exists(db_path):
+        return ""
+    
+    tokens = re.findall(r'[A-Za-z0-9_]{3,}', query_narrative)
+    stopwords = {"patient", "tooth", "teeth", "presented", "under", "with", "dental", "treatment", "procedure", "performed"}
+    valid_tokens = [t for t in tokens if t.lower() not in stopwords]
+    
+    if not valid_tokens:
+        valid_tokens = ["dental", "periodontal", "restoration", "crown", "canal"]
+        
+    fts_match_query = " OR ".join(valid_tokens[:8])
+    
+    snippets = []
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT source_file, page_num, snippet(corpus_fts, 3, '[', ']', '...', 14)
+            FROM corpus_fts
+            WHERE corpus_fts MATCH ?
+            ORDER BY rank LIMIT ?
+        """, (fts_match_query, max_chunks))
+        
+        for sf, pn, snip in cur.fetchall():
+            clean_snip = snip.replace('\n', ' ').strip()
+            snippets.append(f"• [{sf} | Page {pn}]: {clean_snip}")
+        conn.close()
+    except Exception:
+        snippets = []
+        
+    return "\n".join(snippets) if snippets else ""
 
-Return JSON strictly in this EXACT structure:
+# ==========================================
+# SIDEBAR: EXECUTIVE PROFILE
+# ==========================================
+with st.sidebar:
+    st.markdown("""
+    <div class="profile-card">
+        <div class="profile-name">Dr. Sulaiman Alhowaish</div>
+        <div class="profile-role">Deputy Manager & Prosthodontics Registrar, Dental Department</div>
+        <div class="profile-org">
+            Alyamamah Hospital<br>
+            Riyadh Second Health Cluster (R2)
+        </div>
+        <div class="profile-contact">
+            <strong>Mobile:</strong> <a href="tel:+966508172926">+966 50 817 2926</a><br>
+            <strong>Email:</strong> <a href="mailto:s.alhowaish@gmail.com">s.alhowaish@gmail.com</a><br>
+            <strong>Focus:</strong> Prosthodontics & Revenue Cycle Architecture
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="sub-section-title">Clinical & Regulatory Qualifications</div>', unsafe_allow_html=True)
+    st.markdown("""
+    * **SB-Pros** | Saudi Board in Prosthodontics  
+    * **MSc** | Executive Master in Insurance (KSU)  
+    * **BDS** | Bachelor of Dental Surgery  
+    * **CPC®** | Certified Professional Coder (AAPC)  
+    * **IBM SkillsBuild** | AI in Healthcare
+    """)
+
+    api_key = st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else st.text_input("Gemini API Key", type="password")
+    if not api_key:
+        st.caption("Store `GEMINI_API_KEY` in Streamlit Secrets for unauthenticated sessions.")
+
+# ==========================================
+# MAIN INTERFACE HEADER (UPDATED SEPTEMBER 2026)
+# ==========================================
+logo_element = f'<img src="{logo_b64}" class="brand-logo-img">' if logo_b64 else ""
+st.markdown(f"""
+<div class="brand-header">
+    <div class="brand-top-row">
+        <div class="brand-title-group">
+            {logo_element}
+            <div>
+                <h1 class="brand-title" style="display:inline-block;">FERRULE</h1>
+                <span class="brand-author" style="margin-left:0.5rem;">by Dr. Sulaiman Alhowaish</span>
+            </div>
+        </div>
+    </div>
+    <div class="brand-subtitle">
+        NPHIES compliant clinical documentation system and revenue assurance engine
+    </div>
+    <div class="brand-version">
+        Updated September 2026
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# PROMPT LOGIC & REGULATORY PRINCIPLES
+# ==========================================
+BASE_PRINCIPLES = f"""
+You are an expert Certified Professional Coder (CPC), Dental Revenue Cycle Auditor, and Clinical Documentation Improvement (CDI) Specialist in Saudi Arabia.
+Your objective is PROACTIVE DENIAL PREVENTION, STATUTORY ARTICLE 11 REVENUE ASSURANCE, and CLINICAL DOCUMENTATION STANDARDIZATION across all dental specialties.
+
+You are grounded in:
+1. Official CCHI Saudi Billing System (SBS) v3.0 Dental Alphabetic Index & Tabular List.
+2. Official SBS Coding Standards (SBSCS v3.0, October 2025).
+3. Official ICD-10-AM Dental Diagnostic Ground Truth Concept Table (Chapter XI, Trauma, Status).
+4. Official Article 11 Statutory Government Sector Dental Tariff Schedule (712 Procedures).
+5. CCHI Pre-Approval Policies, CHI Implementing Regulations, and NPHIES Adjudication Standards.
+
+1. DUAL TAXONOMY & ENCOUNTER ROUTING MANDATE (NPHIES COMPLIANCE)
+- OUTPATIENT DENTAL CARE: Billed using the Australian Schedule of Dental Services and Glossary (ADA item numbers mapped to SBS v3.0 `97xxx-xx-xx` format).
+- INPATIENT / OPERATING ROOM / MAXILLOFACIAL CARE: Billed using ICD-10-AM Diagnosis + 7-digit ACHI 10th Edition procedure codes.
+- TOOTH NOTATION: Strictly mandatory FDI two-digit numbering (Permanent 11-48, Deciduous 51-85).
+- TOOTH SURFACES: Strictly validate against NPHIES Codeable Concepts: {fdi_surface_reference}. Multi-surface restorations MUST be billed as ONE multi-surface code, never separated.
+
+2. CCHI / NPHIES PRIOR-AUTHORIZATION (PA) RULES & THE 500 SAR THRESHOLD
+- MANDATORY 500 SAR EXEMPTION: Any outpatient dental service where the one-time treatment is LESS THAN 500 SAR is STRICTLY EXEMPT from Prior Authorization. Requesting PA for services < 500 SAR is an official Level 1 Violation. Mark as [PA EXEMPT: Clean Direct Claim (Service < 500 SAR Threshold)].
+- PA MANDATORY (Services >= 500 SAR & Major Interventions): Crowns [470], bridges [471], dentures [474], implants [400], completed RCT [462], surgical extractions [458], periodontal surgery [456]. Statutory 60-min SLA enforced.
+- TIMELY FILING DEADLINES: Private: 30 days. Government/Clusters: 45 days. Re-submissions: 15 days.
+
+3. OFFICIAL SBSCS DENTAL CODING & BUNDLING STANDARDS
+- Crown Lengthening (97238-00-00 [456]): Strictly EXCLUDES routine periodontal flap surgery (97232-xx) (Tabular List Page 167).
+- Endodontics (SBSCS 4042): Completed RCT billed as ONE code per tooth based on type (Molar 97420-03-00, Premolar 97420-02-00, Anterior 97420-01-00). Inherently bundles extirpation, shaping, obturation. NEVER bill emergency pulpectomy (97419-00-10) concurrently on same day. Requires pre-op radiograph.
+- Prosthodontics (SBSCS 4060): Denture fabrication stages are non-billable (0.00 SAR). Full insertion (97719-01-70) unlocks global fee (SAR 8,000). Post & core includes core build-up.
+- Orthodontics (SBSCS 4080): Comprehensive exam (97011-00-20, SAR 500) inherently bundles photos, OPG, ceph, tracings, and study models. Separate billing prohibited.
+- Periodontal Surgery (SBSCS 4021): Flap entry/closure coded separately from tissue regeneration. Probing depth >= 4mm and BOP required.
+
+4. NPHIES CLEARINGHOUSE DENIAL PROTECTION RULES
+Proactively guard the claim against these active NPHIES denial triggers:
+{nphies_denial_context}
+"""
+
+DISCOVERY_EVALUATOR_PROMPT = """
+You are an expert Dental Clinical Documentation Specialist and Revenue Cycle Auditor in Saudi Arabia.
+Analyze the clinician's case note and determine whether critical data points required by CCHI, NPHIES, and SBSCS v3.0 are missing or ambiguous.
+
+RESPOND STRICTLY IN JSON FORMAT ONLY:
 {
-  "procedure_detected": "Identified Procedure Name (e.g., Bimaxillary Complete Denture / Molar Root Canal Therapy / Zirconium Crown Prep)",
-  "medical_necessity_guidance": "Brief 1-2 sentence guidance on medical necessity to avoid NPHIES denials (N-DC-044/045/084).",
-  "questions": [
+  "status": "READY_TO_AUDIT" or "NEED_CLARIFICATION",
+  "assessment": "Concise 1-sentence evaluation of what is missing or ambiguous.",
+  "clarifications": [
     {
-      "id": "q1",
-      "question": "Which tooth (FDI #) or region was treated?",
-      "type": "selectbox",
-      "options": ["Tooth #16 (Upper Right 1st Molar)", "Tooth #11", "Tooth #26", "Tooth #36", "Tooth #46", "Both Arches (Upper Maxillary & Lower Mandibular)", "Quadrant 1", "Quadrant 2", "Quadrant 3", "Quadrant 4"]
-    },
-    {
-      "id": "q2",
-      "question": "Which supporting radiographs / evidence are archived?",
-      "type": "multiselect",
-      "options": ["Pre-operative PA Radiograph", "Working Length Log / Apex Locator PA", "Post-operative Obturation PA", "Bitewing Radiograph Series", "Panoramic Radiograph (OPG)", "Full-Mouth Periodontal Chart (PPD >= 4-5mm)"]
-    },
-    {
-      "id": "q3",
-      "question": "What visit stage was completed today?",
-      "type": "selectbox",
-      "options": ["Single Visit (Completed today)", "Visit 1: Prep / Extirpation / Primary Impression", "Visit 2: Intermediate Dressing / Try-in / Border Molding", "Visit 3: Final Obturation / Crown Cementation / Insertion"]
-    },
-    {
-      "id": "q4",
-      "question": "What anesthesia and isolation method were used?",
-      "type": "selectbox",
-      "options": ["Local Infiltration (2% Lidocaine 1:100k) + Cotton Roll Isolation", "Infiltration / Block + Rubber Dam Isolation", "Nerve Block + Cotton Roll Isolation", "No Local Anesthesia Used"]
+      "label": "Name of Parameter (e.g. FDI Tooth, Diagnostic Etiology, Surfaces, Radiographs, Staging)",
+      "options": ["Specific option 1", "Specific option 2", "Specific option 3", "Other / Stated in Note"]
     }
   ]
 }
+Generate 3 to 5 realistic, clinically accurate dropdown parameters with options tailored directly to the patient's case. Return JSON ONLY.
 """
 
-def build_final_audit_prompt(doctor_note, note_style, is_staged, staged_stage, additional_details_formatted):
-    prompt = f"""
-You are FERRULE AI — an expert Clinical Assistant, Revenue Cycle Partner, and CDI Specialist in Saudi Arabia.
-Your core mission is to empower the clinician by taking their raw notes and selected dropdown details, turning them into an AUDIT-PROOF, INSURANCE CLAIM-DENIAL PROOF clinical encounter record that guarantees maximum compliant reimbursement under Saudi regulations.
+SUPPORTED_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash"]
 
-CLINICIAN'S RAW INPUT NOTE:
-{doctor_note}
+def call_gemini_resilient(client, prompt, system_instruction, temperature, force_json=False):
+    last_err = None
+    for model_id in SUPPORTED_MODELS:
+        for attempt in range(2):
+            try:
+                config_args = {
+                    "system_instruction": system_instruction,
+                    "temperature": temperature,
+                }
+                if force_json:
+                    config_args["response_mime_type"] = "application/json"
+                response = client.models.generate_content(
+                    model=model_id,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(**config_args)
+                )
+                return response.text.strip()
+            except Exception as e:
+                last_err = e
+                err_str = str(e).lower()
+                if "404" in err_str or "not_found" in err_str or "not supported" in err_str:
+                    break
+                time.sleep(1)
+    raise last_err
 
-CLINICIAN'S DROPDOWN-SELECTED DETAILS:
-{additional_details_formatted if additional_details_formatted else 'All details inferred from primary note.'}
-
-CLINICIAN'S PREFERENCES:
-- Desired Note Style: {note_style}
-- Multi-Visit Staged Encounter: {'YES (' + staged_stage + ')' if is_staged else 'NO / Single Visit'}
-
-STRICT REGULATORY & COMPLIANCE MASTER MATRIX (ENFORCE ALL 8 SPECIALTIES):
-
-1. CRITICAL SBS V3.0 CODE FORMAT: ALL Saudi Billing System (SBS v3.0) procedure codes MUST be formatted strictly as 9 digits in the 'XXXXX-XX-XX' hyphenated format (e.g., 97420-03-00 for Molar RCT, 97455-00-10 for RCT dressing, 97613-02-00 for Zirconium crown, 97719-01-80 for Tooth prep, 97521-00-00 for Posterior restoration, 97719-00-00 for Bimaxillary complete denture). NEVER write 5-digit or unhyphenated codes in the SBS v3.0 column.
-
-2. REMOVABLE PROSTHODONTICS (SBS BLOCK 474/475/476):
-   - BIMAXILLARY COMPLETE DENTURE MANDATE (SBS 97719-00-00): When complete dentures are provided for BOTH upper (maxillary) and lower (mandibular) arches together, they MUST be billed under the single combination code 97719-00-00 ('Removable complete denture, maxillary and mandibular', ACHI 97719-00). NEVER split or unbundle bimaxillary complete dentures into separate single-arch codes (97711-00-00 and 97712-00-00) when treating both arches together.
-   - SINGLE ARCH COMPLETE DENTURES: Maxillary complete denture (97711-00-00), Mandibular complete denture (97712-00-00).
-   - INTERIM DENTURES: Interim bimaxillary complete dentures (97715-00-10).
-   - STAGED TARIFF LOCKS: Preliminary impressions (97719-01-10), border molding (97719-01-20), final impression (97719-01-30), jaw relation/bite reg (97719-01-50), and wax try-in (97719-01-60) MUST be locked at 0.00 SAR during intermediate visits to prevent unbundling rejections (N-DC-084). Global fee releases ONLY on final delivery (Visit 5).
-   - DIAGNOSIS: Complete loss of teeth (K08.1) + Atrophy of edentulous alveolar ridge (K08.2).
-
-3. FIXED PROSTHODONTICS — CROWNS & BRIDGES (SBS BLOCK 470/471/472):
-   - Single crowns: Porcelain/Ceramic (97613-01-00), Zirconium (97613-02-00), E-max (97613-03-00), Full Metal (97611-00-00).
-   - Bridge pontics: Direct (97642-00-00), Indirect (97643-00-10).
-   - Tooth prep (97719-01-80) & Temporary crown (97631-00-10) are locked at 0.00 SAR ("part of main service"). Global crown fee unlocks on delivery. Core buildup (97575-00-10) is separately billable on Visit 1 (300 SAR).
-   - EVIDENCE: Pre-op PA proving sound ferrule height (>1.5-2.0mm) to avoid N-DC-045.
-
-4. ENDODONTICS (SBS BLOCK 461/462/463/464):
-   - Anterior RCT (97420-01-00), Premolar RCT (97420-02-00), Molar RCT (97420-03-00).
-   - Direct Pulp Cap (97411-00-10), Pulpotomy (97414-00-00).
-   - Intermediate Ca(OH)2 dressing/irrigation (97455-00-10) locked at 0.00 SAR during multi-visit care.
-   - DIAGNOSIS: Irreversible Pulpitis (K04.0), Pulp Necrosis (K04.1), or Apical Periodontitis (K04.4).
-   - EVIDENCE: 3-X-ray series (Pre-op PA + Working Length Log + Post-op Obturation PA).
-
-5. RESTORATIVE & OPERATIVE (SBS BLOCK 465/466/469):
-   - Anterior Composite: 1 surf (97511-00-00), 2 surf (97512-00-00), 3 surf (97513-00-00), 4+ surf (97514-00-00).
-   - Posterior Composite: 1 surf (97521-00-00), 2 surf (97522-00-00), 3 surf (97523-00-00), 4+ surf (97524-00-00).
-   - DIAGNOSIS: Enamel Caries (K02.0), Dentine Caries (K02.1), Cementum Caries (K02.2).
-
-6. ORAL SURGERY (SBS BLOCK 457/458/459):
-   - Simple Extraction (97311-01-00), Surgical Extraction (97321-01-00).
-   - Soft tissue impaction (97322-00-00), Partial bony impaction (97323-00-00), Complete bony impaction (97324-00-00).
-   - EVIDENCE: Pre-op OPG or Periapical radiograph archived.
-
-7. PERIODONTICS (SBS BLOCK 456):
-   - Calculus removal/Scaling (97114-00-00), Root Planing & Subgingival Curettage per tooth/quadrant (97281-00-10), Flap surgery (97232-00-00).
-   - Mandates Quadrant site selection (Q1-Q4).
-   - DIAGNOSIS & EVIDENCE: Chronic Periodontitis (K05.3) + Full-mouth Periodontal Chart (PPD >= 4-5mm).
-
-8. DENTAL IMPLANTS (SBS BLOCK 473):
-   - Stage 1 Implant placement (45845-00-00), Stage 2 Uncovering (45847-00-00), Implant Crown (97665-00-00).
-   - Enforces 3-6 month separation interval between Stage 1 and Stage 2.
-
-9. PREVENTIVE & DIAGNOSTIC (SBS BLOCK 450/451/490):
-   - Comprehensive Exam (97011-00-00), Periodic Exam (97012-00-00), Consultation (97014-00-00).
-   - Consultation Lock (N-DC-043): Consultations within 14-30 days for same condition during active care are locked at 0.00 SAR.
-
-OUTPUT REQUIREMENTS:
-Produce a structured, clean response with these exact sections:
-
-### 1. 🛡️ CLINICIAN'S PRE-FLIGHT COMPLIANCE & MEDICAL NECESSITY CHECKLIST
-Provide single-line markdown checkboxes `* [x]` confirming:
-- Anatomical site & surfaces verified (FDI tooth # or Arch/Quadrant).
-- ICD-10-AM Primary Diagnosis justifies medical necessity.
-- Required diagnostic radiographs/attachments archived.
-- Unbundling & tariff locks applied (0.00 SAR on intermediate steps).
-- NPHIES denial codes prevented (N-DC-044, N-DC-045, N-DC-084, N-DC-043).
-
-### 2. 💰 STATUTORY ARTICLE 11 PAYABLE TARIFF TABLE
-Markdown table with columns (SBS Code MUST be 9 digits XXXXX-XX-XX):
-| Service Description | ACHI Code (5 digits) | SBS v3.0 Code (9 digits XXXXX-XX-XX) | Block | Claim Action | Govt Tariff SAR | Bundled / Locked Status |
-
-### 3. 📋 AUDIT-PROOF CLINICAL NOTE
-Generate the ideal clinical note in the requested style ({note_style}):
-- If "Concise SmartForm Macro", generate a tight, professional hospital macro.
-- If "Detailed SOAP Progress Note", generate a complete Subjective, Objective, Assessment, Plan note.
-- Enclose the note strictly between `<CLINICAL_NOTE_START>` and `<CLINICAL_NOTE_END>`.
-
-### 4. 🔒 NPHIES CASE CONTINUITY METADATA
-Output structured episode tracking metadata strictly enclosed between `<NPHIES_BLOCK>` and `</NPHIES_BLOCK>`.
-"""
-    return prompt
-
-# ------------------------------------------------------------------------------
-# 3. STREAMLIT USER INTERFACE (AI DROPDOWN DISCOVERY WORKFLOW)
-# ------------------------------------------------------------------------------
-
-# Header Banner
-st.markdown('<div class="main-header">🦷 FERRULE AI — Clinical Assistant & Revenue Shield</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Write a brief note, let AI generate targeted dropdowns for missing details, prevent denials, and build audit-proof claims.</div>', unsafe_allow_html=True)
-
-# Sidebar Controls
-with st.sidebar:
-    st.header("⚙️ Assistant Preferences")
-    
-    guided_mode = st.radio(
-        "Guided Discovery Mode:",
-        ["ON — AI asks missing details via Dropdowns", "OFF — Directly generate audit-proof claim"],
-        index=0,
-        help="When ON, AI analyzes your note and generates instant dropdown choices for missing clinical variables."
+def evaluate_encounter_completeness(client, doctor_input):
+    prompt = f"CLINICIAN ENCOUNTER ENTRY:\n{doctor_input}"
+    raw = call_gemini_resilient(
+        client=client,
+        prompt=prompt,
+        system_instruction=DISCOVERY_EVALUATOR_PROMPT,
+        temperature=0.1,
+        force_json=True
     )
-    is_guided_on = guided_mode.startswith("ON")
+    try:
+        return json.loads(raw)
+    except Exception:
+        match = re.search(r"(\{.*\})", raw, re.DOTALL)
+        if match:
+            try: return json.loads(match.group(1))
+            except Exception: pass
+        return {"status": "READY_TO_AUDIT"}
 
-    note_style = st.selectbox(
-        "Clinical Note Style:",
+def construct_dynamic_instructions(inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway):
+    instructions = [BASE_PRINCIPLES]
+    
+    if is_staged:
+        if staged_pathway != "Auto-detect from case input":
+            instructions.append(f"\nACTIVE WORKFLOW PRE-SET: Clinician selected pathway: {staged_pathway}. Align stage numbering and tariff locks strictly with this clinical pathway.\n")
+        
+        instructions.append("""
+================================================================================
+NPHIES CASE CONTINUITY METADATA BLOCK MANDATE
+================================================================================
+Because this is an active multi-visit staged episode, enclose strictly between <NPHIES_BLOCK> and </NPHIES_BLOCK> tags at the very end:
+<NPHIES_BLOCK>
+[EPISODE_ID]: [Specialty]-[Procedure]-[FDI Tooth/Arch]
+[PRIMARY_ICD10]: [Code] — [Accurate Description]
+[PRIMARY_SBS_CODE]: [SBS 9-digit Code] [Block]
+[CURRENT_STAGE]: Visit [X] of [Total Visits] — [Description of Today's Step]
+[BILLING_STATUS]: [IN_PROGRESS - CLAIM LOCKED (0.00 SAR) / BILLABLE ENCOUNTER (Tariff SAR) / GLOBAL CLAIM DELIVERED (Tariff SAR)]
+[NEXT_VISIT_EXPECTED]: Visit [X+1] — [Description of Next Step]
+[ANTI-UNBUNDLING_LOCK]: [LOCKED / EPISODE_ACTIVE / EPISODE_CLOSED]
+</NPHIES_BLOCK>
+""")
+    else:
+        instructions.append("\nSINGLE-VISIT ENCOUNTER: Do NOT output any <NPHIES_BLOCK> or Case Continuity Tokens.\n")
+
+    instructions.append("\nREQUIRED OUTPUT SECTIONS (Generate ONLY the sections explicitly requested below):\n")
+    sec_num = 1
+    
+    if inc_icd:
+        instructions.append(f"""
+{sec_num}. PRIMARY DIAGNOSIS & ETIOLOGY (ICD-10-AM)
+   - Specific, valid ICD-10-AM code from the ground truth table. State `COF = 2 (Present on admission)` or `COF = 1`.
+""")
+        sec_num += 1
+
+    if inc_billing:
+        instructions.append(f"""
+{sec_num}. BILLABLE CODING TABLE (SBS v3.0 & ACHI 10th Ed)
+   - Columns MUST strictly be:
+     `Service Description` | `ACHI Code` | `SBS v3.0 Code` | `Block` | `Claim Action Flag` | `Govt Tariff (SAR)* [Art. 11]` | `Bundled Elements (NON-BILLABLE)`
+   - Tariff: 0.00 for intermediate locked visits; exact statutory Article 11 tariff for standalone or definitive procedures.
+   - Immediately below table: `*Tariff prices are determined in accordance with Article 11: "Dental services pricing in government sector".`
+   - Sub-table: "⚠️ Mutually Exclusive Alternatives (Select Only One - Do NOT Bill Together)" if alternatives exist.
+""")
+        sec_num += 1
+
+    if inc_checklist:
+        instructions.append(f"""
+{sec_num}. CLINICIAN'S RAPID PRE-FLIGHT CHECKLIST (CCHI / NPHIES)
+   - ULTRA-CONCISE & TELEGRAPHIC (Strictly 1 single line per item with markdown checkbox `* [x]`):
+     * [x] **Anatomical Site:** [FDI 2-digit tooth number & surfaces verified]
+     * [x] **Condition Onset:** [COF = 2 (Present upon presentation) confirmed]
+     * [x] **Prior-Auth Status:** [PA-Exempt (< 500 SAR threshold) OR Mandatory PA Reference verified]
+     * [x] **Diagnostic Attachments:** [Pre-op PA / Working Length PA / Post-op PA / OPG / CBCT / Periodontal Chart archived]
+     * [x] **Anti-Denial Protection:** [Primary technical trap avoided with exact standard citation]
+""")
+        sec_num += 1
+
+    if note_style == "Concise SmartForm Macro (Hospital Standard)":
+        instructions.append(f"""
+<CLINICAL_NOTE_START>
+{sec_num}. AUDIT-PROOF EMR CLINICAL NOTE (CONCISE SMARTFORM MACRO)
+**Encounter Specialty:** [Specialty Name]
+**Procedure:** [Definitive Procedure Name]
+**Tooth / Site:** [Tooth FDI #___ / Arch / Quadrant]
+**Anesthesia:** [None / Infiltration: Specify Agent & Dose / Nerve Block]
+**Radiographs:** [None / Pre-op PA / Post-op PA: Specify Finding]
+**Isolation:** [Single-tooth Rubber Dam Isolation documented]
+**Patient Status:** [Cooperative / Mild Sensitivity / Asymptomatic]
+**Clinical Procedure:** [Short factual lines detailing steps performed today].
+**Materials / Delivery:** [Multi-choice pickers: e.g., [PVS / Polyether] or [RelyX / Resin / GI]].
+**Post-Op & Follow-Up:** [Concise 1-line home care instruction and recall timeframe].
+<CLINICAL_NOTE_END>
+""")
+    elif note_style == "Detailed SOAP Clinical Note (Hospital / Academic)":
+        instructions.append(f"""
+<CLINICAL_NOTE_START>
+{sec_num}. AUDIT-PROOF EMR SOAP CLINICAL PROGRESS NOTE (NARRATIVE)
+Comprehensive narrative medical record: Subjective, Objective, Assessment, Plan & Procedure, Post-Operative Instructions.
+<CLINICAL_NOTE_END>
+""")
+
+    return "".join(instructions)
+
+def generate_scrubbed_package(client, doctor_input, icd_db, tariff_text, system_instruction):
+    icd_reference = "\n".join([f"- {item['code']}: {item['title']} ({item['category']})" for item in icd_db]) if icd_db else "[Built-in ICD-10-AM Active]"
+    rag_context = query_fts5_rag_knowledge(doctor_input, max_chunks=4)
+
+    prompt_payload = f"""
+OFFICIAL ICD-10-AM DENTAL DIAGNOSTIC GROUND TRUTH:
+{icd_reference}
+
+OFFICIAL CCHI ARTICLE 11 STATUTORY GOVERNMENT DENTAL TARIFF SCHEDULE:
+{tariff_text}
+
+VERIFIED TEXTBOOK & REGULATORY EXCLUSION EXCERPTS (FTS5 RAG RETRIEVAL):
+{rag_context if rag_context else "[Standard SBS v3.0 / NPHIES Ground Truth Active]"}
+
+CLINICIAN ENCOUNTER CASE SUMMARY:
+{doctor_input}
+"""
+    return call_gemini_resilient(
+        client=client,
+        prompt=prompt_payload,
+        system_instruction=system_instruction,
+        temperature=0.05
+    )
+
+# ==========================================
+# UI LAYOUT & WORKFLOW CONTROLS
+# ==========================================
+col_in, col_out = st.columns([1, 1], gap="large")
+
+with col_in:
+    st.markdown('<div class="sub-section-title">Clinical Encounter & Episode Record</div>', unsafe_allow_html=True)
+    doctor_input = st.text_area(
+        label="Clinical Case Input",
+        label_visibility="collapsed",
+        placeholder="Enter encounter details, clinical findings, or paste the NPHIES Case Continuity Token from a prior appointment...",
+        height=180
+    )
+    
+    guided_mode = st.checkbox(
+        "Enable Interactive Guided Discovery Mode",
+        value=False,
+        help="Evaluates documentation against NPHIES rules and provides convenient dropdown selection lists."
+    )
+    
+    st.markdown('<div class="sub-section-title">Audit Package Configuration</div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        inc_icd = st.checkbox("ICD-10-AM Diagnosis", value=True)
+    with c2:
+        inc_billing = st.checkbox("SBS v3.0 / ACHI Table", value=True)
+    with c3:
+        inc_checklist = st.checkbox("NPHIES Checklist", value=True)
+        
+    note_style = st.radio(
+        "EMR Documentation Format:",
         [
             "Concise SmartForm Macro (Hospital Standard)",
-            "Detailed SOAP Progress Note (Academic / Hospital Standard)",
-            "Audit & Tariff Only (Skip Note Generation)"
+            "Detailed SOAP Clinical Note (Hospital / Academic)",
+            "Coding & Regulatory Audit Only (Skip Note)"
         ],
-        index=0,
-        help="Choose your preferred documentation style for your EMR."
+        index=0
     )
-
-    st.divider()
-    st.header("🔄 Procedure Staging")
-    is_staged = st.checkbox("Is this a Multi-Visit Staged Procedure?", value=False)
-    staged_stage = "Single Visit"
+    
+    st.markdown('<div class="sub-section-title">Episode Staging Engine</div>', unsafe_allow_html=True)
+    is_staged = st.checkbox(
+        "Enable Multi-Visit Episode Continuity Guard", 
+        value=False, 
+        help="Locks intermediate stages to 0.00 SAR to protect against unbundling rejections, releasing the global tariff on definitive delivery."
+    )
+    staged_pathway = "Auto-detect from case input"
     if is_staged:
-        staged_stage = st.selectbox(
-            "Current Visit Stage:",
+        staged_pathway = st.selectbox(
+            "Target Clinical Pathway:",
             [
-                "Visit 1 — Preparation / Extirpation / Primary Impression",
-                "Visit 2 — Intermediate Dressing / Try-in / Border Molding",
-                "Visit 3 — Final Obturation / Crown Cementation / Denture Delivery",
-                "Visit 4+ — Post-Op Re-Evaluation / Adjustment"
+                "Auto-detect from case input",
+                "Indirect Crown / Bridge — [Prep/Provisional -> Delivery]",
+                "Removable Partial Denture (RPD) — [4-Stage Protocol]",
+                "Complete Dentures (Bimaxillary) — [5-Stage Protocol]",
+                "Endodontics (RCT) — [Biomechanical -> Obturation]",
+                "Implant Prosthetics — [Surgical -> Uncovery -> Impression -> Delivery]"
             ]
         )
-
-    st.divider()
-    st.info(f"🤖 **Active Engine Model:** Hardcoded to `{HARDCODED_MODEL}`")
-
-# Main Interface Tabs
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📝 1. Clinical Assistant & Audit", 
-    "📖 2. Standalone Codebook Search", 
-    "📊 3. Regulatory Cheat Sheet", 
-    "🔒 4. EMR Note & NPHIES Metadata"
-])
-
-# ------------------------------------------------------------------------------
-# TAB 1: CLINICAL ASSISTANT & AUDIT WITH AI DROPDOWNS
-# ------------------------------------------------------------------------------
-with tab1:
-    st.markdown('<div class="assistant-box">💡 <b>Zero-Typing Assistant:</b> Write a brief 1-2 sentence note. FERRULE AI will generate custom <b>dropdown choices</b> for any missing details so you can complete your claim with just a few clicks!</div>', unsafe_allow_html=True)
     
-    doctor_note = st.text_area(
-        "Enter Clinical Encounter Narrative (a few words or sentences):",
-        height=120,
-        placeholder="e.g. prep tooth 16 for zirconium crown placed core buildup and temp crown",
-        help="Write or dictate a brief description of what was done during the visit."
-    )
+    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+    submit_btn = st.button("Audit Claim & Generate Documentation", type="primary", use_container_width=True)
 
-    api_key = get_gemini_api_key()
+with col_out:
+    st.markdown('<div class="sub-section-title">Compliance Audit & Scrubbed Record</div>', unsafe_allow_html=True)
     
-    col_a1, col_a2 = st.columns([1, 2])
-    with col_a1:
-        run_process = st.button("🚀 Step 1: Analyze Note & Build Dropdowns", type="primary", use_container_width=True)
-
-    # STEP 1: RUN DISCOVERY & BUILD AI DROPDOWNS
-    if run_process:
+    if submit_btn:
         if not api_key:
-            st.error("⚠️ Please enter your Gemini API Key in the sidebar.")
-        elif not doctor_note.strip():
-            st.error("⚠️ Please enter a brief clinical note before running.")
+            st.error("Missing Gemini API credentials. Configure GEMINI_API_KEY in repository secrets.")
+        elif not doctor_input.strip():
+            st.warning("Please supply an encounter narrative or case summary.")
+        elif not (inc_icd or inc_billing or inc_checklist or note_style != "Coding & Regulatory Audit Only (Skip Note)"):
+            st.warning("Select at least one output section to compile.")
         else:
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel(HARDCODED_MODEL)
-
-                if is_guided_on:
-                    with st.spinner("AI Assistant Analyzing Note & Generating Targeted Dropdowns..."):
-                        disc_prompt = f"{DYNAMIC_DISCOVERY_PROMPT}\n\nCLINICIAN NOTE:\n{doctor_note}"
-                        disc_response = model.generate_content(
-                            disc_prompt,
-                            generation_config=genai.types.GenerationConfig(temperature=0.1)
-                        )
-                        raw_disc = disc_response.text
-                        
-                        try:
-                            json_match = re.search(r'\{.*\}', raw_disc, re.DOTALL)
-                            if json_match:
-                                disc_data = json.loads(json_match.group(0))
-                            else:
-                                disc_data = {"procedure_detected": "Dental Procedure", "medical_necessity_guidance": "Complete required clinical indicators.", "questions": []}
-                        except Exception:
-                            disc_data = {"procedure_detected": "Dental Procedure", "medical_necessity_guidance": "Complete required clinical indicators.", "questions": []}
-
-                        st.session_state["discovery_data"] = disc_data
-                        st.session_state["doctor_note_saved"] = doctor_note
-                        st.session_state["step1_done"] = True
-                else:
-                    with st.spinner(f"Generating Audit-Proof Claim & {note_style}..."):
-                        final_prompt = build_final_audit_prompt(doctor_note, note_style, is_staged, staged_stage, "")
-                        final_response = model.generate_content(
-                            final_prompt,
-                            generation_config=genai.types.GenerationConfig(temperature=0.1)
-                        )
-                        st.session_state["audit_result"] = final_response.text
-                        st.success("✅ Audit-Proof Claim & Note Generated Successfully!")
-
-            except Exception as e:
-                st.error(f"❌ Execution Error: {str(e)}")
-
-    # DISPLAY STEP 2: AI-GENERATED DROPDOWNS
-    if "discovery_data" in st.session_state and is_guided_on:
-        disc = st.session_state["discovery_data"]
-        st.divider()
-        st.markdown(f"### 🎯 Step 2: Confirm Missing Details for {disc.get('procedure_detected', 'Dental Procedure')}")
-        st.info(f"💡 **Medical Necessity Tip:** {disc.get('medical_necessity_guidance', 'Select options below to ensure claim approval.')}")
-
-        questions = disc.get("questions", [])
-        user_responses = {}
-
-        if questions:
-            st.markdown("#### 📋 Select From AI-Generated Dropdowns (Zero Writing Required):")
+            client = genai.Client(api_key=api_key)
+            st.session_state.final_scrubbed_output = None
             
-            with st.form("dropdown_discovery_form"):
-                for q in questions:
-                    q_id = q.get("id", "q")
-                    q_text = q.get("question", "Question")
-                    q_type = q.get("type", "selectbox")
-                    q_options = q.get("options", ["Not Applicable / None"])
-
-                    if q_type == "multiselect":
-                        user_responses[q_text] = st.multiselect(q_text, options=q_options, key=f"form_{q_id}")
-                    else:
-                        user_responses[q_text] = st.selectbox(q_text, options=q_options, key=f"form_{q_id}")
-
-                submit_final = st.form_submit_button("🚀 Step 3: Generate Audit-Proof Record", type="primary", use_container_width=True)
-
-            if submit_final:
-                formatted_choices = []
-                for q_k, q_v in user_responses.items():
-                    if isinstance(q_v, list):
-                        formatted_choices.append(f"- **{q_k}**: {', '.join(q_v) if q_v else 'None selected'}")
-                    else:
-                        formatted_choices.append(f"- **{q_k}**: {q_v}")
-                
-                additional_details_formatted = "\n".join(formatted_choices)
-                
-                try:
-                    import google.generativeai as genai
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel(HARDCODED_MODEL)
-
-                    saved_note = st.session_state.get("doctor_note_saved", doctor_note)
-                    with st.spinner("Finalizing Audit-Proof Claim, Tariff Table & Clinical Note..."):
-                        final_prompt = build_final_audit_prompt(
-                            saved_note, note_style, is_staged, staged_stage, additional_details_formatted
-                        )
-                        final_response = model.generate_content(
-                            final_prompt,
-                            generation_config=genai.types.GenerationConfig(temperature=0.1)
-                        )
-                        st.session_state["audit_result"] = final_response.text
-                        st.success("✅ Audit-Proof Claim & Ideal Note Generated Successfully!")
-
-                except Exception as e:
-                    st.error(f"❌ Final Audit Error: {str(e)}")
-
-    # DISPLAY AUDIT RESULTS
-    if "audit_result" in st.session_state:
-        st.divider()
-        st.markdown("### 🔍 Final Audit & Revenue Shield Results")
-        st.markdown(st.session_state["audit_result"])
-
-# ------------------------------------------------------------------------------
-# TAB 2: STANDALONE CODEBOOK SEARCH
-# ------------------------------------------------------------------------------
-with tab2:
-    st.subheader("📖 Standalone SBS v3.0 & ACHI Dental Codebook Search")
-    st.markdown("Search across all official Saudi Billing System (SBS v3.0) procedure codes and ACHI 10th Edition crosswalks without running an AI audit.")
-    
-    codebook_df = load_codebook_dataframe()
-    if codebook_df is not None:
-        col_c1, col_c2 = st.columns([3, 1])
-        with col_c1:
-            search_query = st.text_input(
-                "🔍 Search Code, Keyword, or Description:", 
-                placeholder="e.g. 97420, root canal, crown, pulpectomy, examination, restoration...",
-            )
-        with col_c2:
-            if "SBS Block Number" in codebook_df.columns:
-                all_blocks = ["All Blocks"] + [str(b) for b in sorted(codebook_df["SBS Block Number"].dropna().unique())]
-                selected_block = st.selectbox("Filter by SBS Block:", all_blocks)
+            if guided_mode:
+                with st.spinner("Analyzing case completeness against CCHI/NPHIES criteria..."):
+                    try:
+                        discovery_result = evaluate_encounter_completeness(client, doctor_input)
+                        if discovery_result.get("status") == "READY_TO_AUDIT":
+                            st.session_state.discovery_data = None
+                            st.session_state.pending_case_input = ""
+                            dynamic_sys_instruction = construct_dynamic_instructions(
+                                inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
+                            )
+                            st.session_state.final_scrubbed_output = generate_scrubbed_package(
+                                client, doctor_input, icd_db, tariff_reference, dynamic_sys_instruction
+                            )
+                        else:
+                            st.session_state.discovery_data = discovery_result
+                            st.session_state.pending_case_input = doctor_input
+                    except Exception as e:
+                        st.error(f"Guided analysis failed: {str(e)}")
             else:
-                selected_block = "All Blocks"
-                
-        filtered_df = codebook_df.copy()
-        if selected_block != "All Blocks":
-            filtered_df = filtered_df[filtered_df["SBS Block Number"].astype(str) == str(selected_block)]
-            
-        if search_query.strip():
-            q = search_query.strip().lower()
-            mask = (
-                filtered_df["SBS Code hyphenated"].astype(str).str.lower().str.contains(q, na=False) |
-                filtered_df["Long Description"].astype(str).str.lower().str.contains(q, na=False) |
-                filtered_df["ACHI Code"].astype(str).str.lower().str.contains(q, na=False) |
-                filtered_df["ACHI Description"].astype(str).str.lower().str.contains(q, na=False)
-            )
-            filtered_df = filtered_df[mask]
+                st.session_state.discovery_data = None
+                st.session_state.pending_case_input = ""
+                with st.spinner("Scrubbing documentation against SBS v3.0, Article 11 Tariffs & NPHIES..."):
+                    try:
+                        dynamic_sys_instruction = construct_dynamic_instructions(
+                            inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
+                        )
+                        st.session_state.final_scrubbed_output = generate_scrubbed_package(
+                            client, doctor_input, icd_db, tariff_reference, dynamic_sys_instruction
+                        )
+                    except Exception as e:
+                        st.error(f"Audit engine execution failed: {str(e)}")
 
-        st.metric("Total Codes Matched", f"{len(filtered_df)} / {len(codebook_df)}")
-        display_cols = ["SBS Code hyphenated", "Long Description", "SBS Block Number", "ACHI Code", "ACHI Description"]
-        avail_cols = [c for c in display_cols if c in filtered_df.columns]
-        st.dataframe(filtered_df[avail_cols], use_container_width=True, hide_index=True)
-    else:
-        st.warning("⚠️ Local `dental_sbs_achi_map.csv` not detected in project directory.")
-
-# ------------------------------------------------------------------------------
-# TAB 3: REGULATORY CHEAT SHEET
-# ------------------------------------------------------------------------------
-with tab3:
-    st.subheader("Saudi Billing System (SBS v3.0) & NPHIES Denial Prevention Shield")
-    col_r1, col_r2 = st.columns(2)
-    with col_r1:
-        st.markdown("#### 🚫 Primary NPHIES Denial Codes Prevented")
-        st.markdown("""
-        - **`N-DC-044`**: Service not clinically indicated based on clinical documentation.
-        - **`N-DC-045`**: Service not clinically indicated without supporting diagnostic evidence.
-        - **`N-DC-084`**: Unbundling violation (intermediate stage submitted with global procedure).
-        - **`N-DC-043`**: Consultation billed within mandatory free follow-up window (14-30 days).
-        - **`BE-1-4`**: Prior approval required and not obtained.
-        """)
-    with col_r2:
-        st.markdown("#### 💰 Mandatory Multi-Visit Tariff Locks")
-        st.markdown("""
-        - **Root Canal Therapy (97420):** Intermediate dressing (`97455`) locked at **`0.00 SAR`**. Global tariff unlocks on obturation.
-        - **Indirect Crowns (97613):** Tooth prep (`97719`) & Temp crown (`97631`) locked at **`0.00 SAR`**. Tariff unlocks on crown delivery.
-        - **Bimaxillary Complete Dentures (97719):** Single code `97719-00-00`. Impressions (`97719-01-10`) locked at **`0.00 SAR`**. Fee unlocks on insertion.
-        """)
-
-# ------------------------------------------------------------------------------
-# TAB 4: EMR NOTE & NPHIES METADATA
-# ------------------------------------------------------------------------------
-with tab4:
-    st.subheader("Generated EMR Clinical Note & NPHIES Metadata")
-    if "audit_result" in st.session_state:
-        res_text = st.session_state["audit_result"]
+    # ==========================================
+    # GUIDED DISCOVERY: DROPDOWN & DYNAMIC OTHER WORKFLOW
+    # ==========================================
+    if st.session_state.discovery_data:
+        d_data = st.session_state.discovery_data
+        st.markdown('<div class="interactive-card">', unsafe_allow_html=True)
+        st.markdown("### 📋 Interactive Intake Assessment")
+        st.write(d_data.get("assessment", "Encounter requires specific clinical parameters to satisfy NPHIES clearinghouse rules."))
+        st.markdown("### ❓ Clinician Clarification Checklist")
+        st.caption("Select the appropriate clinical parameters below from each dropdown list:")
         
-        note_match = re.search(r'<CLINICAL_NOTE_START>(.*?)</CLINICAL_NOTE_START>', res_text, re.DOTALL)
-        if note_match:
-            st.markdown("#### 📋 Clean EMR Clinical Note (Ready to Copy)")
-            st.code(note_match.group(1).strip(), language="text")
+        clarifications = d_data.get("clarifications", [])
+        chosen_values = {}
+        for idx, item in enumerate(clarifications):
+            lbl = item.get("label", f"Parameter {idx+1}")
+            opts = item.get("options", ["Confirmed / Applicable", "Not Applicable"])
+            selected_val = st.selectbox(lbl, opts, key=f"guide_sel_{idx}")
             
-        nphies_match = re.search(r'<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>', res_text, re.DOTALL)
+            # Immediately show a text box if "Other" or "Stated in Note" is chosen
+            if "other" in str(selected_val).lower():
+                custom_spec = st.text_input(
+                    f"Specify details for {lbl}:",
+                    placeholder="Enter custom clinical detail, tooth #, finding, or surface...",
+                    key=f"guide_other_{idx}"
+                )
+                if custom_spec.strip():
+                    chosen_values[lbl] = f"Other ({custom_spec.strip()})"
+                else:
+                    chosen_values[lbl] = selected_val
+            else:
+                chosen_values[lbl] = selected_val
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        btn_c1, btn_c2 = st.columns([1, 1])
+        with btn_c1:
+            finalize_guided = st.button("Finalize & Generate Audit-Proof Claim", type="primary", use_container_width=True)
+        with btn_c2:
+            cancel_guided = st.button("Reset / Clear Assessment", use_container_width=True)
+            
+        if cancel_guided:
+            st.session_state.discovery_data = None
+            st.session_state.pending_case_input = ""
+            st.session_state.final_scrubbed_output = None
+            st.rerun()
+            
+        if finalize_guided and api_key:
+            with st.spinner("Synthesizing selected criteria & generating regulatory audit..."):
+                try:
+                    client = genai.Client(api_key=api_key)
+                    clarification_summary = "\n".join([f"- {k}: {v}" for k, v in chosen_values.items()])
+                    merged_input = f"{st.session_state.pending_case_input}\n\nCLINICIAN PARAMETERS SPECIFIED:\n{clarification_summary}"
+                    
+                    dynamic_sys_instruction = construct_dynamic_instructions(
+                        inc_icd, inc_billing, inc_checklist, note_style, is_staged, staged_pathway
+                    )
+                    st.session_state.final_scrubbed_output = generate_scrubbed_package(
+                        client, merged_input, icd_db, tariff_reference, dynamic_sys_instruction
+                    )
+                    st.session_state.discovery_data = None
+                    st.session_state.pending_case_input = ""
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Finalization failed: {str(e)}")
+
+    # ==========================================
+    # RENDER FINAL AUDIT RESULTS & NOTE SYNC
+    # ==========================================
+    if st.session_state.final_scrubbed_output:
+        raw_result = st.session_state.final_scrubbed_output
+        
+        nphies_match = re.search(r"<NPHIES_BLOCK>(.*?)</NPHIES_BLOCK>", raw_result, re.DOTALL)
         if nphies_match:
-            st.markdown("#### 🔒 NPHIES Case Continuity Metadata")
-            st.code(nphies_match.group(1).strip(), language="text")
-    else:
-        st.info("Run an audit in Tab 1 to generate the clean EMR note and NPHIES metadata block.")
+            block_content = nphies_match.group(1).strip()
+            clean_result = re.sub(r"<NPHIES_BLOCK>.*?</NPHIES_BLOCK>", "", raw_result, flags=re.DOTALL).strip()
+        else:
+            fallback_match = re.search(r"(\[EPISODE_ID\].*?\[ANTI-UNBUNDLING_LOCK\].*?$)", raw_result, re.DOTALL)
+            if fallback_match:
+                block_content = fallback_match.group(1).strip()
+                clean_result = raw_result[:fallback_match.start()].strip()
+                clean_result = re.sub(r"(?:🔄\s*)?(?:NPHIES Case Continuity Token.*?$|NPHIES CASE CONTINUITY BLOCK.*?$)", "", clean_result, flags=re.MULTILINE).strip()
+            else:
+                block_content = None
+                clean_result = raw_result.strip()
+            
+        note_match = re.search(r"<CLINICAL_NOTE_START>(.*?)<CLINICAL_NOTE_END>", clean_result, re.DOTALL)
+        if note_match:
+            regulatory_sections = clean_result[:note_match.start()].strip()
+            base_clinical_note = note_match.group(1).strip()
+        else:
+            regulatory_sections = clean_result
+            base_clinical_note = ""
+
+        st.markdown(regulatory_sections)
+        
+        st.markdown('<div class="verification-card">', unsafe_allow_html=True)
+        st.markdown("#### ✅ Clinician Pre-Flight Verification Sign-Off")
+        st.caption("Active checkmarks automatically stamp into the clinical note below:")
+        
+        pv1, pv2, pv3, pv4 = st.columns(4)
+        with pv1:
+            chk_fdi = st.checkbox("FDI Site Confirmed", value=True, key="pv_fdi")
+            chk_rad = st.checkbox("Radiographs Archived", value=True, key="pv_rad")
+        with pv2:
+            chk_dam = st.checkbox("Rubber Dam Documented", value=True, key="pv_dam")
+            chk_pa = st.checkbox("PA Status Cleared", value=True, key="pv_pa")
+        with pv3:
+            chk_cof = st.checkbox("COF = 2 Flag Confirmed", value=True, key="pv_cof")
+            chk_surf = st.checkbox("Surfaces Validated", value=True, key="pv_surf")
+        with pv4:
+            chk_consent = st.checkbox("Informed Consent On File", value=True, key="pv_consent")
+            chk_anti = st.checkbox("Anti-Unbundling Active", value=True, key="pv_anti")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if base_clinical_note:
+            stamped_items = []
+            if chk_fdi: stamped_items.append("FDI Site Confirmed")
+            if chk_rad: stamped_items.append("Diagnostic Radiographs Archived")
+            if chk_dam: stamped_items.append("Rubber Dam Isolation Documented")
+            if chk_pa: stamped_items.append("Prior-Authorization Status Cleared")
+            if chk_cof: stamped_items.append("COF=2 Pre-existing Condition Flag")
+            if chk_surf: stamped_items.append("FDI Tooth Surfaces Verified")
+            if chk_consent: stamped_items.append("Informed Consent Documented")
+            if chk_anti: stamped_items.append("Anti-Unbundling Multi-Stage Locked")
+
+            audit_stamp = "\n".join([f"  [✓] {item}" for item in stamped_items]) if stamped_items else "  [!] No verification flags confirmed by clinician."
+            
+            complete_clinical_note = f"{base_clinical_note}\n\n**CLINICAL COMPLIANCE & VERIFICATION AUDIT:**\n{audit_stamp}"
+            st.markdown(complete_clinical_note)
+
+        if is_staged and block_content:
+            st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+            st.caption("NPHIES Episode Continuity Token (Persist across multi-visit encounters):")
+            st.code(block_content, language="text")
